@@ -1,0 +1,1887 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#06141a" />
+<title>LabCheck — Live Sync Attendance</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔬</text></svg>">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#06141a; --panel:#0e1f2a; --panel2:#122a37; --line:#1c3a4a;
+    --txt:#e6f4f8; --mut:#7fa1b0; --acc:#14b8a6; --acc-l:#5eead4;
+    --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444;
+  }
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--txt);
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; min-height:100dvh; overflow-x:hidden;
+  }
+  .bg{
+    position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;
+    background:
+      radial-gradient(1000px 700px at 50% -15%, #0e3340 0%, transparent 60%),
+      radial-gradient(700px 500px at 90% 100%, #14364a 0%, transparent 55%),
+      radial-gradient(700px 500px at 5% 90%, #0d2c3a 0%, transparent 55%),
+      var(--bg);
+  }
+  .orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:.28;animation:drift 24s ease-in-out infinite}
+  .orb.a{width:260px;height:260px;background:#14b8a6;top:6%;left:-60px}
+  .orb.b{width:220px;height:220px;background:#22d3ee;top:45%;right:-70px;animation-delay:-8s}
+  .orb.c{width:200px;height:200px;background:#6366f1;bottom:5%;left:20%;animation-delay:-14s}
+  @keyframes drift{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-40px) scale(1.1)}66%{transform:translate(-25px,30px) scale(.95)}}
+  .app{position:relative;z-index:1;max-width:600px;margin:0 auto;padding:20px 16px 60px}
+
+  .topbar{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  .topbar .grow{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+  .topbar strong{font-size:16.5px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .topbar small{color:var(--mut);font-size:12.5px}
+  .icon-btn{
+    width:40px;height:40px;flex:0 0 40px;border-radius:12px;border:1px solid var(--line);
+    background:rgba(14,31,42,.85);color:var(--txt);font-size:17px;cursor:pointer;transition:.15s;
+  }
+  .icon-btn:hover{background:var(--panel2);border-color:#2a5568}
+  .lvl-chip{
+    display:inline-flex;align-items:center;gap:6px;padding:5px 11px 5px 8px;border-radius:99px;
+    font-size:12px;font-weight:700;border:1px solid;cursor:pointer;background:var(--panel);color:var(--txt);
+  }
+  .lvl-chip .dot{width:7px;height:7px;border-radius:50%}
+
+  .masthead{text-align:center;padding:16px 0 22px}
+  .crest{
+    width:78px;height:78px;margin:0 auto 16px;border-radius:22px;display:grid;place-items:center;font-size:38px;
+    background:linear-gradient(155deg,#2dd4bf,#0d9488 55%,#0f766e);
+    box-shadow:0 20px 50px -18px rgba(20,184,166,.9), inset 0 1px 0 rgba(255,255,255,.25);
+    animation:bob 4s ease-in-out infinite;
+  }
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  .masthead h1{font-size:23px;letter-spacing:-.02em;font-weight:700;line-height:1.2}
+  .masthead .dept{color:var(--acc-l);font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;margin-top:8px}
+  .masthead .tagline{color:var(--mut);font-size:13px;margin-top:10px;max-width:340px;margin-left:auto;margin-right:auto}
+
+  .section-lbl{
+    display:flex;align-items:center;gap:10px;
+    font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--mut);font-weight:600;margin:0 0 12px;
+  }
+  .section-lbl::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+
+  .levels{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:22px}
+  .lvl{
+    aspect-ratio:1 / 1.05;border-radius:18px;border:1.5px solid var(--line);
+    background:linear-gradient(165deg, rgba(255,255,255,.035), rgba(255,255,255,0));
+    color:var(--txt);font-family:inherit;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+    padding:10px 6px;transition:.18s;position:relative;overflow:hidden;
+  }
+  .lvl::before{
+    content:'';position:absolute;inset:0;
+    background:radial-gradient(circle at 50% 120%, var(--lvl-c,#14b8a6) -30%, transparent 65%);
+    opacity:0;transition:.25s;
+  }
+  .lvl:hover{transform:translateY(-3px);border-color:var(--lvl-c,#14b8a6)}
+  .lvl:hover::before{opacity:.22}
+  .lvl.on{
+    border-color:var(--lvl-c,#14b8a6);
+    background:linear-gradient(165deg, color-mix(in srgb, var(--lvl-c,#14b8a6) 22%, transparent), transparent);
+    box-shadow:0 12px 30px -12px var(--lvl-c,#14b8a6);
+  }
+  .lvl.on::before{opacity:.3}
+  .lvl .ico{font-size:26px;line-height:1;position:relative}
+  .lvl .num{font-size:19px;font-weight:800;letter-spacing:-.03em;line-height:1;position:relative;font-variant-numeric:tabular-nums}
+  .lvl .tag{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);font-weight:600;position:relative;text-align:center;line-height:1.2}
+  .lvl.on .tag{color:var(--lvl-c,#14b8a6)}
+  .lvl.on .num{color:#fff}
+
+  .actions{display:grid;gap:11px}
+  .action{
+    display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;
+    padding:17px 16px;border-radius:18px;border:1.5px solid var(--line);
+    background:linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,0)), var(--panel);
+    color:var(--txt);font-family:inherit;cursor:pointer;text-align:left;transition:.18s;
+  }
+  .action:hover{transform:translateY(-2px);border-color:#2a5568}
+  .action.teach:hover{border-color:var(--acc);box-shadow:0 14px 34px -16px var(--acc)}
+  .action.study:hover{border-color:#60a5fa;box-shadow:0 14px 34px -16px #60a5fa}
+  .action:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+  .action .ic{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:24px;border:1px solid var(--line);background:var(--panel2)}
+  .action.teach .ic{background:linear-gradient(155deg,rgba(45,212,191,.25),rgba(13,148,136,.1))}
+  .action.study .ic{background:linear-gradient(155deg,rgba(96,165,250,.25),rgba(59,130,246,.1))}
+  .action .txt{min-width:0;display:flex;flex-direction:column;gap:3px}
+  .action .txt strong{font-size:15.5px;font-weight:700}
+  .action .txt small{font-size:12.5px;color:var(--mut);line-height:1.35}
+  .action .arrow{color:var(--mut);font-size:17px;transition:.18s}
+  .action:hover .arrow{color:var(--txt);transform:translateX(3px)}
+
+  .hint-strip{
+    display:flex;align-items:center;gap:9px;padding:11px 14px;border-radius:13px;margin-top:14px;
+    background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);
+    color:#fcd34d;font-size:12.5px;line-height:1.4;
+  }
+  .hint-strip.ok{background:rgba(34,197,94,.07);border-color:rgba(34,197,94,.2);color:#86efac}
+  .hint-strip.err{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.25);color:#fca5a5}
+
+  .panel{
+    background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)), var(--panel);
+    border:1px solid var(--line);border-radius:20px;padding:18px;
+  }
+  .panel + .panel{margin-top:12px}
+
+  .fld{display:block;margin-bottom:15px}
+  .fld > span{display:block;font-size:12.5px;color:var(--mut);margin-bottom:7px;font-weight:600}
+  .fld input{
+    width:100%;padding:13px 14px;border-radius:13px;border:1.5px solid var(--line);
+    background:#08161e;color:var(--txt);font-size:16px;font-family:inherit;outline:none;transition:.15s;
+  }
+  .fld input:focus{border-color:var(--acc);box-shadow:0 0 0 4px rgba(20,184,166,.15)}
+  .fld input::placeholder{color:#3d5c6b}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{
+    flex:1;min-width:60px;padding:11px 6px;border-radius:12px;border:1.5px solid var(--line);
+    background:#08161e;color:var(--mut);font-weight:700;font-size:13.5px;font-family:inherit;cursor:pointer;transition:.15s;
+  }
+  .chip:hover{border-color:#2a5568;color:var(--txt)}
+  .chip.on{background:linear-gradient(180deg,var(--acc-l),var(--acc));color:#04161c;border-color:transparent;box-shadow:0 8px 22px -10px rgba(20,184,166,.9)}
+
+  .btn{
+    width:100%;padding:15px;border-radius:14px;border:1px solid transparent;
+    font-weight:700;font-size:15.5px;line-height:1;font-family:inherit;cursor:pointer;transition:.15s;margin-top:4px;
+  }
+  .btn.primary{background:linear-gradient(180deg,var(--acc-l),var(--acc));color:#04161c;box-shadow:0 12px 30px -12px rgba(20,184,166,.9)}
+  .btn.primary:hover{filter:brightness(1.06);transform:translateY(-1px)}
+  .btn.primary:disabled{opacity:.5;cursor:default;filter:none;transform:none;box-shadow:none}
+  .btn.ghost{background:transparent;border-color:var(--line);color:var(--mut)}
+  .btn.ghost:hover{color:var(--txt);border-color:#2a5568}
+  .btn.danger{color:#f87171;border-color:#4a2130}
+  .btn.danger:hover{background:#2a1520;color:#fca5a5}
+  .btn.big{padding:18px;font-size:17px}
+
+  .hint{font-size:12.5px;color:var(--mut);line-height:1.5;margin:-4px 0 15px}
+  .hint b{color:var(--acc-l)}
+  .foot{font-size:12px;color:#54707f;text-align:center;margin-top:20px;line-height:1.6}
+  .foot b{color:var(--acc-l)}
+  .status{font-size:13.5px;margin-top:12px;text-align:center;min-height:20px;color:var(--mut);line-height:1.5}
+  .status.err{color:#fca5a5}
+  .status.ok{color:#86efac}
+  .sess-preview{font-size:12.5px;margin:-4px 0 14px;min-height:18px;color:var(--mut);line-height:1.45}
+  .sess-preview.ok{color:#86efac}
+  .sess-preview.bad{color:#fca5a5}
+
+  .grid-stage{
+    padding:22px 18px;border-radius:24px;text-align:center;
+    background:
+      radial-gradient(circle at 50% -30%, rgba(45,212,191,.20), transparent 60%),
+      linear-gradient(180deg, rgba(20,184,166,.08), rgba(20,184,166,.02)),
+      var(--panel);
+    border:1.5px solid #1e4a52;position:relative;overflow:hidden;
+  }
+  .grid-stage::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    background:linear-gradient(90deg,transparent,var(--acc-l),transparent);
+    animation:scan 3s linear infinite;
+  }
+  @keyframes scan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+  .grid-stage.closed{border-color:#5a2530;background:radial-gradient(circle at 50% -30%, rgba(239,68,68,.18), transparent 60%), var(--panel)}
+  .grid-stage.closed::before{background:linear-gradient(90deg,transparent,#ef4444,transparent)}
+
+  .grid-head{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:16px;padding:0 2px;
+  }
+  .grid-head .lbl{
+    font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--acc-l);font-weight:700;
+  }
+  .grid-stage.closed .grid-head .lbl{color:#fca5a5}
+  .grid-head .timer{
+    font-size:12px;color:var(--mut);font-weight:600;
+    font-variant-numeric:tabular-nums;
+  }
+  .grid-head .timer b{color:#fff;font-weight:800}
+
+  .live-grid,.tap-grid{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+    max-width:340px;margin:0 auto;
+    padding:14px;border-radius:20px;
+    background:rgba(0,0,0,.28);border:1px solid var(--line);
+  }
+  .grid-cell{
+    aspect-ratio:1;border-radius:14px;position:relative;
+    background:rgba(255,255,255,.03);border:1.5px solid var(--line);
+    display:grid;place-items:center;font-size:34px;line-height:1;
+    transition:transform .25s cubic-bezier(.4,0,.2,1), background .3s, border-color .3s, box-shadow .3s;
+  }
+  .grid-cell .num,.tap-cell .num{
+    position:absolute;top:5px;left:8px;
+    font-size:10px;font-weight:800;color:var(--mut);
+    font-variant-numeric:tabular-nums;letter-spacing:0;transition:color .3s;
+  }
+  .grid-cell.active{
+    border-color:var(--acc-l);
+    background:radial-gradient(circle at center, rgba(94,234,212,.35), rgba(20,184,166,.05) 70%);
+    box-shadow:
+      0 0 0 2px rgba(94,234,212,.55),
+      0 0 44px rgba(94,234,212,.7),
+      inset 0 0 24px rgba(94,234,212,.35);
+    transform:scale(1.10);
+    z-index:2;
+    animation:cellPulse 1.1s ease-in-out infinite;
+  }
+  .grid-cell.active .num{color:#fff}
+  .grid-cell.active::before{
+    content:'';position:absolute;inset:-5px;border-radius:18px;
+    border:2px solid var(--acc-l);opacity:.55;
+    animation:cellRing 1.6s ease-out infinite;
+  }
+  .grid-cell.active .emo{
+    animation:cellEmoji 1.1s ease-in-out infinite;
+    display:block;
+  }
+  @keyframes cellPulse{
+    0%,100%{box-shadow:0 0 0 2px rgba(94,234,212,.55),0 0 44px rgba(94,234,212,.6),inset 0 0 24px rgba(94,234,212,.3)}
+    50%    {box-shadow:0 0 0 3px rgba(94,234,212,.85),0 0 64px rgba(94,234,212,.9),inset 0 0 34px rgba(94,234,212,.5)}
+  }
+  @keyframes cellRing{
+    0%{transform:scale(1);opacity:.7}
+    100%{transform:scale(1.28);opacity:0}
+  }
+  @keyframes cellEmoji{
+    0%,100%{transform:translateY(0) scale(1)}
+    50%    {transform:translateY(-4px) scale(1.10)}
+  }
+  .grid-stage.closed .grid-cell{opacity:.35;filter:grayscale(1)}
+  .grid-stage.closed .grid-cell.active{animation:none;transform:none}
+
+  .grid-tip{
+    margin-top:16px;font-size:12.5px;color:var(--mut);line-height:1.5;
+  }
+  .grid-tip b{color:#fff}
+
+  .mini-qr{
+    display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;
+    padding:14px;border-radius:16px;background:var(--panel);
+    border:1px solid var(--line);margin-bottom:14px;
+  }
+  .mini-qr .frame{
+    width:82px;height:82px;background:#fff;border-radius:10px;padding:5px;
+    display:grid;place-items:center;flex-shrink:0;
+  }
+  .mini-qr .frame img{width:100%;height:100%;display:block}
+  .mini-qr .frame.empty{
+    color:#0a1e28;font-size:10px;text-align:center;line-height:1.2;
+    padding:6px;font-weight:700;
+  }
+  .mini-qr .txt{display:flex;flex-direction:column;gap:4px;line-height:1.35}
+  .mini-qr .txt strong{font-size:14px;font-weight:700}
+  .mini-qr .txt small{font-size:12px;color:var(--mut)}
+  .mini-qr .txt small b{color:var(--acc-l);font-weight:800;letter-spacing:.05em}
+
+  .pills{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 20px}
+  .pill{
+    font-size:12px;color:var(--mut);background:var(--panel);border:1px solid var(--line);
+    padding:8px 13px;border-radius:99px;font-weight:500;
+    display:inline-flex;align-items:center;gap:6px;
+    font-variant-numeric:tabular-nums;
+  }
+  .pill b{color:var(--txt);font-weight:700}
+  .pill.live{color:#86efac;border-color:rgba(34,197,94,.3)}
+  .pill.live b{color:#86efac}
+  .pill.dead{color:#fca5a5;border-color:rgba(239,68,68,.3)}
+  .pill.dead b{color:#fca5a5}
+  .pill.btn-pill{cursor:pointer;font-family:inherit;transition:.15s}
+  .pill.btn-pill:hover{color:var(--txt);border-color:#2a5568;background:var(--panel2)}
+  .pill.heartbeat{color:#5eead4;border-color:rgba(94,234,212,.25)}
+
+  .roster-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px}
+  .roster-head h2{font-size:15px;font-weight:700;white-space:nowrap;display:flex;align-items:center;gap:8px}
+  .roster-head h2 span{color:#04161c;background:var(--acc-l);font-size:12px;font-weight:800;padding:2px 9px;border-radius:99px;font-variant-numeric:tabular-nums}
+  .roster-head button{
+    background:transparent;border:1px solid var(--line);color:var(--mut);font-weight:600;font-size:12.5px;font-family:inherit;
+    padding:8px 13px;border-radius:10px;cursor:pointer;transition:.15s;white-space:nowrap;
+  }
+  .roster-head button:hover{color:var(--txt);border-color:#2a5568;background:var(--panel2)}
+
+  .row{
+    display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:15px;
+    background:var(--panel);border:1.5px solid var(--line);margin-bottom:8px;
+    animation:slideIn .3s cubic-bezier(.4,0,.2,1) both;
+  }
+  @keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .avatar{
+    width:38px;height:38px;flex:0 0 38px;border-radius:12px;display:grid;place-items:center;
+    background:linear-gradient(155deg, var(--acc-l), var(--acc));color:#04161c;font-weight:800;font-size:15px;
+  }
+  .row-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .row-main strong{font-size:14.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row-main small{font-size:11.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .badge{font-size:10.5px;font-weight:800;padding:5px 10px;border-radius:99px;letter-spacing:.04em;text-transform:uppercase}
+  .badge.ok{color:#86efac;background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.28)}
+  .empty{
+    text-align:center;color:var(--mut);font-size:13.5px;padding:36px 20px;
+    border:1.5px dashed var(--line);border-radius:16px;line-height:1.7;
+  }
+  .empty .ico{font-size:30px;display:block;margin-bottom:10px;opacity:.6}
+
+  .result{text-align:center;padding:40px 20px 20px;position:relative}
+  .result .ring{width:100px;height:100px;margin:0 auto 24px;border-radius:50%;display:grid;place-items:center;font-size:46px}
+  .result.present .ring{
+    background:radial-gradient(circle, rgba(34,197,94,.2), rgba(34,197,94,.05));
+    border:2px solid rgba(34,197,94,.45);
+    animation:pop .5s cubic-bezier(.34,1.56,.64,1);
+    box-shadow:0 0 60px -10px rgba(34,197,94,.5);
+  }
+  @keyframes pop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+  .result h2{font-size:23px;letter-spacing:-.02em;margin-bottom:10px;font-weight:800;color:#86efac}
+  .result p{color:var(--mut);font-size:14.5px;line-height:1.6;max-width:340px;margin:0 auto}
+  .result .meta{
+    margin-top:28px;font-size:13px;color:var(--mut);
+    border:1px solid var(--line);background:var(--panel);border-radius:16px;
+    padding:20px;line-height:2;
+  }
+  .result .meta .r-lvl{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:4px 11px;border-radius:99px;font-size:12px;font-weight:700;
+    border:1px solid;margin-bottom:8px;
+  }
+  .result .meta b{color:var(--txt);font-weight:700}
+  .burst{position:absolute;inset:0;pointer-events:none;overflow:visible}
+  .burst span{position:absolute;top:50px;left:50%;font-size:18px;animation:burst 1.4s cubic-bezier(.2,.6,.4,1) forwards;opacity:0}
+  @keyframes burst{
+    0%{opacity:1;transform:translate(-50%,0) scale(.4)}
+    100%{opacity:0;transform:translate(calc(-50% + var(--dx)), var(--dy)) scale(1.2) rotate(var(--rot))}
+  }
+
+  .tap-cell{
+    aspect-ratio:1;border-radius:14px;position:relative;
+    background:rgba(255,255,255,.03);border:1.5px solid var(--line);
+    display:grid;place-items:center;font-size:34px;line-height:1;
+    cursor:pointer;font-family:inherit;
+    transition:transform .15s, background .15s, border-color .15s, box-shadow .15s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .tap-cell:active:not(:disabled){border-color:var(--acc-l);background:rgba(20,184,166,.12)}
+  @media (hover:hover){ .tap-cell:hover:not(:disabled){
+    border-color:var(--acc-l);
+    background:rgba(20,184,166,.12);
+    transform:translateY(-2px) scale(1.02);
+    box-shadow:0 10px 24px -12px var(--acc);
+  } }
+  .tap-cell.picked{
+    border-color:var(--acc-l);
+    background:linear-gradient(165deg, rgba(94,234,212,.35), rgba(20,184,166,.12));
+    box-shadow:0 0 0 2px var(--acc-l), 0 12px 30px -10px var(--acc);
+    transform:scale(1.04);
+  }
+  .tap-cell.wrong{
+    border-color:var(--bad);
+    background:linear-gradient(165deg, rgba(239,68,68,.35), rgba(239,68,68,.08));
+    animation:shake .4s ease;
+  }
+  .tap-cell:disabled{opacity:.5;cursor:not-allowed}
+  @keyframes shake{
+    0%,100%{transform:translateX(0)}
+    25%{transform:translateX(-6px)}
+    75%{transform:translateX(6px)}
+  }
+
+  .grid-instruction{
+    font-size:14px;line-height:1.55;color:var(--txt);
+    text-align:center;margin-bottom:16px;
+  }
+  .grid-instruction b{color:var(--acc-l);font-weight:800}
+  .grid-instruction small{display:block;color:var(--mut);font-size:12.5px;margin-top:6px;font-weight:400}
+
+  .step-indicator{
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--mut);font-weight:700;margin-bottom:14px;
+  }
+  .step-indicator .s{
+    width:22px;height:22px;border-radius:50%;
+    background:var(--panel2);border:1.5px solid var(--line);
+    display:grid;place-items:center;font-size:11px;color:var(--mut);
+  }
+  .step-indicator .s.on{background:var(--acc-l);color:#04161c;border-color:transparent}
+  .step-indicator .s.done{background:rgba(34,197,94,.2);color:#86efac;border-color:rgba(34,197,94,.4)}
+  .step-indicator .line{width:22px;height:1px;background:var(--line)}
+
+  /* ---------- added: lecturer screens, tables, results ---------- */
+  .app.wide{max-width:1180px}
+  .live-wrap{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;align-items:start}
+  @media (max-width:900px){.live-wrap{grid-template-columns:1fr}}
+  .live-wrap .live-grid{max-width:520px}
+  .live-wrap .grid-cell{font-size:clamp(34px,4.6vw,62px)}
+  .qr-big{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;padding:14px;border-radius:18px;background:var(--panel);border:1px solid var(--line);margin-bottom:14px}
+  .qr-big .frame{width:150px;height:150px;background:#fff;border-radius:12px;padding:6px;display:grid;place-items:center;color:#0a1e28;font-size:11px;font-weight:700;text-align:center}
+  .qr-big .frame svg{width:100%;height:100%;display:block}
+  .qr-big .txt{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .qr-big .txt small{color:var(--mut);font-size:12.5px;line-height:1.4;word-break:break-all}
+  .code-big{font-size:38px;font-weight:800;letter-spacing:.18em;color:var(--acc-l);line-height:1.1;font-variant-numeric:tabular-nums}
+  .badge.warn{color:#fcd34d;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3)}
+  .badge.bad{color:#fca5a5;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3)}
+  .badge.mut{color:var(--mut);background:var(--panel2);border:1px solid var(--line)}
+  .fld select,.fld input[type=file]{
+    width:100%;padding:13px 14px;border-radius:13px;border:1.5px solid var(--line);
+    background:#08161e;color:var(--txt);font-size:16px;font-family:inherit;outline:none}
+  .fld select:focus{border-color:var(--acc)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .tbl th,.tbl td{padding:10px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+  .tbl th{color:var(--mut);font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;font-weight:700}
+  .tbl td small{color:var(--mut);display:block;font-size:11.5px}
+  .tbl tr:last-child td{border-bottom:0}
+  .mini-btn{background:transparent;border:1px solid var(--line);color:var(--mut);font-weight:600;font-size:12px;font-family:inherit;
+    padding:7px 11px;border-radius:9px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .mini-btn:hover{color:var(--txt);border-color:#2a5568;background:var(--panel2)}
+  .mini-btn.acc{color:#04161c;background:linear-gradient(180deg,var(--acc-l),var(--acc));border-color:transparent}
+  .mini-btn.bad{color:#fca5a5;border-color:#4a2130}
+  .mini-btn:disabled{opacity:.5;cursor:default}
+  .panel h3{font-size:14.5px;font-weight:700;margin-bottom:4px}
+  .panel .sub{font-size:12.5px;color:var(--mut);margin-bottom:14px;line-height:1.5}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+  .stat b{display:block;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+  .stat small{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+  .stat.ok b{color:#86efac}.stat.warn b{color:#fcd34d}
+  .row .x{background:transparent;border:0;color:var(--mut);font-size:15px;cursor:pointer;padding:4px 6px;border-radius:8px}
+  .row .x:hover{color:#fca5a5;background:#2a1520}
+  .row.pending{border-style:dashed}
+  .row.rejected{border-color:#4a2130;opacity:.8}
+  .row .avatar.warn{background:linear-gradient(155deg,#fcd34d,#f59e0b)}
+  .row .avatar.bad{background:linear-gradient(155deg,#fca5a5,#ef4444)}
+  .result.rejected .ring{background:radial-gradient(circle, rgba(239,68,68,.2), rgba(239,68,68,.05));border:2px solid rgba(239,68,68,.45);animation:pop .5s cubic-bezier(.34,1.56,.64,1)}
+  .result.rejected h2{color:#fca5a5}
+  .who{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:14px;background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.22);margin-bottom:14px}
+  .who strong{display:block;font-size:14.5px}.who small{color:var(--mut);font-size:12px}
+  .spinner{width:44px;height:44px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--acc-l);animation:spin 1s linear infinite;margin:10px auto 16px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .msgline{font-size:13px;line-height:1.5;padding:10px 12px;border-radius:12px;margin-top:12px;white-space:pre-line}
+  .msgline.ok{background:rgba(34,197,94,.08);color:#86efac;border:1px solid rgba(34,197,94,.22)}
+  .msgline.err{background:rgba(239,68,68,.08);color:#fca5a5;border:1px solid rgba(239,68,68,.25)}
+  .msgline.info{background:rgba(96,165,250,.08);color:#93c5fd;border:1px solid rgba(96,165,250,.25)}
+  .hidden{display:none!important}
+  details.panel summary{cursor:pointer;font-weight:700;font-size:14px;list-style:none}
+  details.panel summary::-webkit-details-marker{display:none}
+  details.panel[open] summary{margin-bottom:12px}
+</style>
+</head>
+<body>
+
+<div class="bg">
+  <div class="orb a"></div>
+  <div class="orb b"></div>
+  <div class="orb c"></div>
+</div>
+
+<div id="app" class="app"></div>
+
+<script>
+/* ============================================================
+   ⚙️  ONE-TIME SETUP — paste your Firebase details between the quotes.
+   (Or leave empty and enter them under ⚙ Settings on each device.)
+   See SETUP.md for the 10-minute Firebase setup.
+   ============================================================ */
+const FIREBASE_URL     =  'https://labcheck-bms-default-rtdb.europe-west1.firebasedatabase.app';
+const FIREBASE_API_KEY = 'AIzaSyA46VOE1vgHzGXSQKuvSOns94c7apDC2Zc';
+
+const DEPARTMENT   = 'Department of Biomedical Science';
+const INDEX_PREFIX = 'MLS';    // index numbers look like MLS/0001/21 (last 2 digits = year of admission)
+
+
+/* ============================================================
+   LabCheck — Live Sync attendance
+   How verification works:
+   • Only the lecturer's device knows the session secret.
+   • A student's tap is stored with Firebase's own clock (server timestamp).
+   • The lecturer's screen checks each tap against the cell that was glowing
+     at that moment, and writes the verdict. Students get MAX_ATTEMPTS tries.
+   ============================================================ */
+const LEVELS = [
+  { id:'100', icon:'🧪', tag:'Fresh Lab',   color:'#34d399' },
+  { id:'200', icon:'🔬', tag:'Microscope',  color:'#22d3ee' },
+  { id:'300', icon:'🧬', tag:'DNA Mode',    color:'#60a5fa' },
+  { id:'400', icon:'💉', tag:'Clinical',    color:'#a78bfa' },
+  { id:'500', icon:'🩸', tag:'Hematology',  color:'#f472b6' },
+  { id:'600', icon:'🏆', tag:'Final Year',  color:'#fbbf24' },
+];
+const levelById = id => LEVELS.find(l => l.id === String(id));
+const GRID_EMOJIS = ['🧪','🔬','🧬','💉','🩸','🧫','🦠','💊','🧠'];
+
+const GRID_WINDOW_MS = 12000;   // glowing cell moves every 12 s
+const TAP_LATENCY_MS = 2500;    // a tap this soon after a move may still match the previous cell (network delay)
+const MAX_ATTEMPTS   = 2;       // tries per student per session
+const SECOND_TAP_MS  = 40000;   // strict mode: 2nd tap must follow the 1st within 40 s
+const POLL_MS        = 1000;
+const MAX_YEARS_ENROLLED = 12;
+
+const CDN_EXCELJS = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+const CDN_QRCODE  = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+
+const $   = (s, r = document) => r.querySelector(s);
+const pad = (n, l = 2) => String(n).padStart(l, '0');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const rnd = n => crypto.getRandomValues(new Uint32Array(n));
+const randCode = (n = 5) => Array.from(rnd(n), x => ALPHA[x % ALPHA.length]).join('');
+const randSecret = () => Array.from(rnd(8), x => x.toString(36)).join('');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const SV = { '.sv': 'timestamp' };   // Firebase server timestamp
+
+function hashCode(str) {
+  let h = 2166136261 >>> 0;
+  const s = String(str);
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return h >>> 0;
+}
+const gridWindow = t => Math.floor(t / GRID_WINDOW_MS);
+const rawCell = (secret, w) => hashCode(secret + ':' + w + ':' + secret.slice(0, 7)) % 9;
+// The glowing cell for a time window. Odd windows avoid both neighbours, so the glow always moves.
+function cellFor(secret, w) {
+  if (w % 2 === 0) return rawCell(secret, w);
+  const a = rawCell(secret, w - 1), b = rawCell(secret, w + 1);
+  const opts = [0, 1, 2, 3, 4, 5, 6, 7, 8].filter(c => c !== a && c !== b);
+  return opts[hashCode(secret + ':odd:' + w) % opts.length];
+}
+const msUntilGridRotation = t => GRID_WINDOW_MS - (t % GRID_WINDOW_MS);
+// Returns the grid window the tap matches, or -1 if it matches nothing.
+function tapWindow(secret, cell, at) {
+  const w = gridWindow(at);
+  if (cell === cellFor(secret, w)) return w;
+  if ((at - w * GRID_WINDOW_MS) < TAP_LATENCY_MS && cell === cellFor(secret, w - 1)) return w - 1;
+  return -1;
+}
+
+/* ---------------- index numbers ---------------- */
+// "mls 1 21", "MLS-0001-21", "mls/1/21" → "MLS/0001/21"; null if invalid
+function normalizeIndex(raw) {
+  const s = String(raw ?? '').toUpperCase().trim().replace(/[\s\\.\-]+/g, '/').replace(/\/+/g, '/');
+  const m = s.match(new RegExp('^' + INDEX_PREFIX + '/?(\\d{1,4})/(\\d{2})$'));
+  return m ? `${INDEX_PREFIX}/${m[1].padStart(4, '0')}/${m[2]}` : null;
+}
+const entryYear = id => 2000 + Number(id.slice(-2));
+const yearOk = id => { const y = entryYear(id), c = new Date().getFullYear(); return y <= c && y >= c - MAX_YEARS_ENROLLED; };
+const toKey = id => id.replace(/\//g, '-');        // Firebase keys can't contain "/"
+const fromKey = k => k.replace(/-/g, '/');
+const INDEX_HELP = `Use the format ${INDEX_PREFIX}/0000/21 — the last two digits are your year of admission.`;
+
+/* ---------------- time formatting ---------------- */
+function fmtTime(at) {
+  if (!at) return '—';
+  const d = new Date(at);
+  return isNaN(d) ? '—' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+function fmtDateTime(at) {
+  if (!at) return '';
+  const d = new Date(at);
+  return isNaN(d) ? '' : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+}
+function fmtMMSS(ms) { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${pad(s % 60)}`; }
+
+/* ---------------- device storage ---------------- */
+function safeSet(key, val) { try { localStorage.setItem(key, val); } catch (_) {} }
+function safeGet(key) { try { return localStorage.getItem(key); } catch (_) { return null; } }
+function safeRemove(key) { try { localStorage.removeItem(key); } catch (_) {} }
+const LS = {
+  cloud: 'labcheck.cloud', apiKey: 'labcheck.apikey', level: 'labcheck.level', authEmu: 'labcheck.authEmulator',
+  auth: 'labcheck.auth', localDb: 'labcheck.db', localName: 'labcheck.lecturerName',
+  secrets: 'labcheck.secrets', device: 'labcheck.device', student: 'labcheck.student'
+};
+function deviceId() {
+  let d = safeGet(LS.device);
+  if (!d) { d = randSecret(); safeSet(LS.device, d); }
+  return d;
+}
+const SecretStore = {
+  all() { try { return JSON.parse(safeGet(LS.secrets)) || {}; } catch { return {}; } },
+  get(id) { return this.all()[id] || null; },
+  set(id, s) { const a = this.all(); a[id] = s; safeSet(LS.secrets, JSON.stringify(a)); }
+};
+
+/* ============================================================
+   DATA LAYER — same API for Firebase (cloud) and this-browser demo (local)
+   ============================================================ */
+const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('labcheck') : null;
+const split = p => String(p).split('/').filter(Boolean);
+function resolveSV(v) {
+  if (v && typeof v === 'object') {
+    if (v['.sv'] === 'timestamp') return Date.now();
+    const o = Array.isArray(v) ? [] : {};
+    for (const [k, x] of Object.entries(v)) o[k] = resolveSV(x);
+    return o;
+  }
+  return v;
+}
+
+const LocalDB = {
+  uid: () => 'local-' + deviceId(),
+  load() { try { return JSON.parse(safeGet(LS.localDb)) || {}; } catch { return {}; } },
+  save(t) { safeSet(LS.localDb, JSON.stringify(t)); bc?.postMessage('sync'); },
+  setPath(t, parts, val) {
+    let n = t;
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (!n[parts[i]] || typeof n[parts[i]] !== 'object') n[parts[i]] = {};
+      n = n[parts[i]];
+    }
+    if (val === null || val === undefined) delete n[parts.at(-1)]; else n[parts.at(-1)] = val;
+  },
+  async get(path) {
+    let n = this.load();
+    for (const p of split(path)) { if (n == null || typeof n !== 'object') return null; n = n[p]; }
+    return n ?? null;
+  },
+  async put(path, val) { const t = this.load(); this.setPath(t, split(path), resolveSV(val)); this.save(t); },
+  async patch(path, obj) {
+    const t = this.load();
+    for (const [k, v] of Object.entries(obj)) this.setPath(t, split(path).concat(split(k)), resolveSV(v));
+    this.save(t);
+  },
+  async queryEq(path, field, value) {
+    const all = (await this.get(path)) || {};
+    return Object.fromEntries(Object.entries(all).filter(([, v]) => v && v[field] === value));
+  },
+  async serverOffset() { return 0; }
+};
+
+class PermissionError extends Error {}
+
+// Apply a Firebase streaming event (put/patch at a path) to a local copy.
+function applyDelta(root, path, data, merge) {
+  const t = JSON.parse(JSON.stringify(root || {}));
+  const parts = split(path);
+  if (!parts.length) return merge ? Object.assign(t, data) : (data || {});
+  if (merge) { for (const [k, v] of Object.entries(data || {})) LocalDB.setPath(t, parts.concat(split(k)), v); }
+  else LocalDB.setPath(t, parts, data);
+  return t;
+}
+
+const Auth = {
+  // Anonymous Firebase sign-in: gives every device a stable id without passwords.
+  data: null,
+  load() { try { this.data = JSON.parse(safeGet(LS.auth)) || null; } catch { this.data = null; } if (this.data && this.data.url !== Cloud.base) this.data = null; },
+  save() { safeSet(LS.auth, JSON.stringify(this.data)); },
+  host() { const e = safeGet(LS.authEmu); return e ? `http://${e}/` : 'https://'; },
+  async token() {
+    if (!this.data) this.load();
+    const now = Date.now();
+    if (this.data && this.data.idToken && this.data.exp - 60000 > now) return this.data.idToken;
+    const key = encodeURIComponent(Cloud.apiKey);
+    if (!Cloud.apiKey) throw new Error('The Firebase Web API key is missing. Add it in ⚙ Settings.');
+    const post = async (url, opts) => { try { return await fetch(url, opts); } catch { throw new Error('No connection to Firebase. Check your internet and try again.'); } };
+    let r, j;
+    if (this.data && this.data.refreshToken) {
+      r = await post(`${this.host()}securetoken.googleapis.com/v1/token?key=${key}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(this.data.refreshToken) });
+      j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        this.data = { ...this.data, idToken: j.id_token, refreshToken: j.refresh_token, uid: j.user_id, exp: now + Number(j.expires_in) * 1000 };
+        this.save(); return this.data.idToken;
+      }
+    }
+    r = await post(`${this.host()}identitytoolkit.googleapis.com/v1/accounts:signUp?key=${key}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ returnSecureToken: true }) });
+    j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const m = j.error?.message || r.status;
+      throw new Error(String(m).includes('ADMIN_ONLY') || String(m).includes('OPERATION_NOT_ALLOWED')
+        ? 'Firebase sign-in is not enabled. In Firebase → Authentication → Sign-in method, enable "Anonymous".'
+        : String(m).includes('API_KEY') ? 'The Firebase Web API key is wrong. Check ⚙ Settings.' : 'Could not sign in to Firebase: ' + m);
+    }
+    this.data = { url: Cloud.base, idToken: j.idToken, refreshToken: j.refreshToken, uid: j.localId, exp: now + Number(j.expiresIn) * 1000 };
+    this.save();
+    return this.data.idToken;
+  }
+};
+
+const Cloud = {
+  base: '', apiKey: '',
+  uid: () => Auth.data?.uid || null,
+  async url(path, params = '') {
+    const tok = await Auth.token();
+    const [b, q] = this.base.split('?');
+    return `${b.replace(/\/$/, '')}/${split(path).map(encodeURIComponent).join('/')}.json?${q ? q + '&' : ''}auth=${tok}${params}`;
+  },
+  async req(method, path, body, params) {
+    let r;
+    try {
+      r = await fetch(await this.url(path, params), {
+        method, cache: 'no-store',
+        headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+        body: body !== undefined ? JSON.stringify(body) : undefined });
+    } catch (e) { throw new Error('No connection to the database. Check your internet.'); }
+    if (r.status === 401 || r.status === 403) throw new PermissionError('Permission denied');
+    if (!r.ok) throw new Error(`Database error (HTTP ${r.status}).`);
+    return r.json();
+  },
+  get(path) { return this.req('GET', path); },
+  put(path, val) { return this.req('PUT', path, val); },
+  patch(path, obj) { return this.req('PATCH', path, obj); },
+  async queryEq(path, field, value) {
+    return (await this.req('GET', path, undefined,
+      `&orderBy=${encodeURIComponent(JSON.stringify(field))}&equalTo=${encodeURIComponent(JSON.stringify(value))}`)) || {};
+  },
+  async serverOffset() {
+    const uid = this.uid();
+    const t0 = Date.now();
+    await this.put(`clock/${uid}`, SV);
+    const t1 = Date.now();
+    const server = await this.get(`clock/${uid}`);
+    return server - Math.round((t0 + t1) / 2);
+  }
+};
+
+let DB = LocalDB;
+const state = {
+  view: 'home', level: safeGet(LS.level) || null, cloudUrl: '', cloudSource: 'none',
+  lecturer: null,         // { name } once verified
+  setupMinutes: 10,
+  setupStrict: safeGet('labcheck.strict') !== '0',
+  live: null,             // lecturer live session state
+  student: null,          // student flow state
+  sessionsCache: null
+};
+
+function applyCloud() {
+  const url = (FIREBASE_URL || safeGet(LS.cloud) || '').trim().replace(/\/$/, '');
+  const key = (FIREBASE_API_KEY || safeGet(LS.apiKey) || '').trim();
+  state.cloudUrl = url;
+  state.cloudSource = FIREBASE_URL ? 'baked' : (url ? 'saved' : 'none');
+  Cloud.base = url; Cloud.apiKey = key;
+  DB = url ? Cloud : LocalDB;
+  Auth.data = null;
+  state.lecturer = null;
+}
+applyCloud();
+const isCloud = () => DB === Cloud;
+async function myUid() { if (isCloud()) { await Auth.token(); return Cloud.uid(); } return LocalDB.uid(); }
+
+/* ---------------- shared lookups ---------------- */
+async function rosterIndex() { return (await DB.get('rosterIndex')) || {}; }
+// Student-side lookup of one index number in the class lists (session level first).
+async function findStudent(key, preferLevel) {
+  const idx = await rosterIndex();
+  const levels = Object.keys(idx).filter(l => idx[l] > 0).sort((a, b) => (b === String(preferLevel)) - (a === String(preferLevel)));
+  for (const l of levels) {
+    const st = await DB.get(`rosters/${l}/students/${key}`);
+    if (st) return { ...st, level: l };
+  }
+  return { none: true, listsExist: levels.length > 0 };
+}
+async function loadLecturer() {
+  if (!isCloud()) { const n = safeGet(LS.localName); state.lecturer = n ? { name: n } : null; return state.lecturer; }
+  const uid = await myUid();
+  const rec = await DB.get(`lecturers/${uid}`).catch(() => null);
+  state.lecturer = rec ? { name: rec.name } : null;
+  return state.lecturer;
+}
+
+/* ---------------- CDN libraries (loaded only when needed) ---------------- */
+const libCache = {};
+function loadScript(src, globalName) {
+  if (window[globalName]) return Promise.resolve(window[globalName]);
+  return libCache[src] ||= new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = () => res(window[globalName]);
+    s.onerror = () => { delete libCache[src]; rej(new Error('Could not load a component from the internet. Check your connection.')); };
+    document.head.appendChild(s);
+  });
+}
+
+let tickTimer = null, pollTimer = null;
+const stopTimers = () => { clearInterval(tickTimer); clearTimeout(pollTimer); tickTimer = pollTimer = null; };
+
+/* ============================================================
+   VIEWS
+   ============================================================ */
+function levelChipHTML(level) {
+  const L = levelById(level);
+  if (!L) return '';
+  return `<span class="lvl-chip" style="border-color:${L.color}55;color:${L.color};cursor:default">
+      <span class="dot" style="background:${L.color}"></span>L${L.id}</span>`;
+}
+const topbar = (title, sub, back = 'back-home', extra = '') => `
+  <header class="topbar">
+    <button class="icon-btn" data-action="${back}" title="Back">←</button>
+    <div class="grow"><strong>${title}</strong><small>${sub}</small></div>${extra}
+  </header>`;
+
+function viewHome() {
+  const level = state.level;
+  const L = level ? levelById(level) : null;
+  const badge = state.cloudSource === 'baked'
+    ? { cls:'ok',  ico:'🔒', txt:'Connected to the department database.' }
+    : state.cloudSource === 'saved'
+      ? { cls:'ok',  ico:'☁️', txt:'Cloud sync on (saved on this device).' }
+      : { cls:'err', ico:'⚠️', txt:'Demo mode — works only inside this browser. Open ⚙ Settings to connect Firebase.' };
+  return `
+    <button class="icon-btn" style="position:fixed;top:18px;right:18px;z-index:5" data-action="go-settings" title="Settings">⚙</button>
+    <div class="masthead">
+      <div class="crest">🔬</div>
+      <h1>Medical Laboratory<br>Sciences</h1>
+      <div class="dept">Biomedical Sciences</div>
+      <p class="tagline">Live Sync attendance — prove you're in the room by reading the screen.</p>
+    </div>
+
+    <div class="actions">
+      <button class="action study" data-action="go-student">
+        <span class="ic">👀</span>
+        <span class="txt"><strong>I'm a student</strong><small>Enter the session code, then tap the glowing cell</small></span>
+        <span class="arrow">→</span>
+      </button>
+      <button class="action teach" data-action="go-teacher">
+        <span class="ic">🎓</span>
+        <span class="txt"><strong>I'm teaching</strong><small>Start a session, class lists, Excel sheets</small></span>
+        <span class="arrow">→</span>
+      </button>
+    </div>
+
+    <div class="section-lbl" style="margin-top:26px">Levels</div>
+    <div class="levels">
+      ${LEVELS.map(l => `
+        <button class="lvl ${level === l.id ? 'on' : ''}" data-action="set-level" data-level="${l.id}" style="--lvl-c:${l.color}">
+          <span class="ico">${l.icon}</span><span class="num">${l.id}</span><span class="tag">${l.tag}</span>
+        </button>`).join('')}
+    </div>
+    ${L ? `<div class="hint-strip ok"><span>${L.icon}</span><span>Default level for new sessions: <b>Level ${L.id}</b>.</span></div>` : ''}
+    <div class="hint-strip ${badge.cls}" style="margin-top:10px"><span>${badge.ico}</span><span>${badge.txt}</span></div>`;
+}
+
+function viewSettings() {
+  const baked = !!FIREBASE_URL;
+  return `
+    ${topbar('Settings', 'Connection &amp; data')}
+    <div class="panel">
+      <h3>Firebase connection</h3>
+      <p class="sub">${baked ? '🔒 Preconfigured in the app file.' : 'Paste these once per device (or ask the admin to put them in the app file so nobody has to).'}</p>
+      <label class="fld"><span>Realtime Database URL</span>
+        <input id="s-cloud" placeholder="https://your-project-default-rtdb.firebaseio.com" value="${esc(state.cloudUrl)}"
+               autocomplete="off" spellcheck="false" ${baked ? 'disabled' : ''}></label>
+      <label class="fld"><span>Web API key</span>
+        <input id="s-key" placeholder="AIzaSy…" value="${esc(Cloud.apiKey)}" autocomplete="off" spellcheck="false" ${FIREBASE_API_KEY ? 'disabled' : ''}></label>
+      ${baked ? '' : `<button class="btn primary" data-action="save-settings">Save on this device</button>`}
+      <button class="btn ghost" data-action="test-connection" style="margin-top:10px">Test connection</button>
+      ${baked ? '' : `<button class="btn ghost danger" data-action="clear-settings" style="margin-top:10px">Forget connection (demo mode)</button>`}
+      <div id="status" class="status"></div>
+    </div>
+    <div class="panel">
+      <h3>This device</h3>
+      <p class="sub" id="lect-status">Checking…</p>
+      <button class="btn ghost" data-action="lecturer-signout">Remove lecturer access from this device</button>
+    </div>
+    ${isCloud() ? '' : `<div class="panel">
+      <p class="hint" style="margin:0 0 12px">Demo data lives only in this browser. Erasing it doesn't touch Firebase.</p>
+      <button class="btn ghost danger" data-action="reset-local">Erase demo data</button></div>`}
+    <p class="foot">This app does not use location services.</p>`;
+}
+
+function viewLecturerJoin() {
+  return `
+    ${topbar('Lecturer access', isCloud() ? 'One-time setup on this device' : 'Demo mode')}
+    <div class="panel">
+      <label class="fld"><span>Your name (as it should appear on attendance sheets)</span>
+        <input id="l-name" placeholder="Dr. A. Mensah" autocomplete="name" value="${esc(safeGet(LS.localName) || '')}"></label>
+      ${isCloud() ? `<label class="fld"><span>Department key</span>
+        <input id="l-key" type="password" placeholder="From the department admin" autocomplete="off"></label>
+        <p class="hint">The department key stops students from opening sessions or changing class lists. You enter it once per device.</p>` : ''}
+      <button class="btn primary big" data-action="lecturer-join">Continue</button>
+      <div id="status" class="status"></div>
+    </div>`;
+}
+
+function viewTeacher() {
+  const lvl = state.level || '100';
+  const opts = [5, 10, 15, 30, 60];
+  return `
+    ${topbar('Lecturer', esc(state.lecturer?.name || ''), 'back-home')}
+    <div class="panel">
+      <h3>Start a Live Sync session</h3>
+      <p class="sub">Project the grid in class. Students tap the glowing cell on their phones — the glow moves every ${GRID_WINDOW_MS / 1000} s.</p>
+      <div class="row2">
+        <label class="fld"><span>Course code</span><input id="t-code" placeholder="MLS 601" autocomplete="off" style="text-transform:uppercase"></label>
+        <label class="fld"><span>Level</span><select id="t-level">${LEVELS.map(l => `<option value="${l.id}" ${l.id === lvl ? 'selected' : ''}>Level ${l.id}</option>`).join('')}</select></label>
+      </div>
+      <label class="fld"><span>Course title</span><input id="t-class" placeholder="e.g. Hematology &amp; Blood Transfusion" autocomplete="off"></label>
+      <label class="fld" style="margin-bottom:8px"><span>Check-in window</span></label>
+      <div class="chips" id="dur-chips" style="margin-bottom:16px">
+        ${opts.map(m => `<button class="chip ${state.setupMinutes === m ? 'on' : ''}" data-action="set-dur" data-min="${m}">${m} min</button>`).join('')}
+      </div>
+      <label class="fld" style="margin-bottom:8px"><span>Security</span></label>
+      <div class="chips" id="sec-chips" style="margin-bottom:8px">
+        <button class="chip ${state.setupStrict ? 'on' : ''}" data-action="set-strict" data-v="1">🔒 Strict — 2 taps</button>
+        <button class="chip ${state.setupStrict ? '' : 'on'}" data-action="set-strict" data-v="0">Standard — 1 tap</button>
+      </div>
+      <p class="hint" style="margin:0 0 16px">Strict: students tap the glowing cell, wait for it to move, then tap the new one. Much harder to guess or relay to friends outside (about 3 in 100 lucky guesses instead of 1 in 4). Takes ~15 seconds per student.</p>
+      <button class="btn primary big" data-action="start-session">Open Live Sync</button>
+      <div id="status" class="status"></div>
+    </div>
+
+    <div class="panel">
+      <h3>My sessions</h3>
+      <p class="sub">Reopen a session or download its Excel attendance sheet.</p>
+      <div id="my-sessions"><div class="status">Loading…</div></div>
+    </div>
+
+    <div class="panel">
+      <h3>Course register (Excel)</h3>
+      <p class="sub">One sheet per course: every session as a column, P/A for each student, % attendance (below 70% highlighted).</p>
+      <div class="row2">
+        <label class="fld"><span>Course</span><select id="reg-course"><option value="">—</option></select></label>
+        <div class="fld"><span style="visibility:hidden">.</span><button class="btn primary" data-action="export-register" style="margin:0">⬇ Download register</button></div>
+      </div>
+      <div id="reg-status" class="status"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Class lists</h3>
+      <p class="sub">Upload each level's list (.xlsx with columns <b>ID</b> and <b>FULL NAME</b>, optional <b>SEX</b>). With lists uploaded, students type only their index number, the official name is used, unknown numbers are rejected, and Excel sheets show absentees.</p>
+      <table class="tbl" id="rosters"><tr><td class="status">Loading…</td></tr></table>
+      <input type="file" id="roster-file" accept=".xlsx" class="hidden">
+      <div id="roster-msg"></div>
+    </div>`;
+}
+
+function gridHTML(opts = {}) {
+  const { interactive = false, picked = null, wrong = false, disabled = false } = opts;
+  return `
+    <div class="${interactive ? 'tap-grid' : 'live-grid'}">
+      ${GRID_EMOJIS.map((e, i) => interactive
+        ? `<button class="tap-cell ${picked === i ? (wrong ? 'wrong' : 'picked') : ''}" data-action="tap-cell" data-cell="${i}" type="button" ${disabled ? 'disabled' : ''}>
+             <span class="num">${i + 1}</span><span class="emo">${e}</span></button>`
+        : `<div class="grid-cell" data-cell="${i}"><span class="num">${i + 1}</span><span class="emo">${e}</span></div>`).join('')}
+    </div>`;
+}
+
+function viewTeacherLive() {
+  const lv = state.live, s = lv.session, L = levelById(s.level);
+  return `
+    <header class="topbar">
+      <button class="icon-btn" data-action="leave-live" title="Back to lecturer page">←</button>
+      <div class="grow"><strong>${esc(s.courseCode ? s.courseCode + ' — ' : '')}${esc(s.className)}</strong>
+        <small>${L.icon} Level ${L.id} · ${esc(s.lecturer || '')}</small></div>
+    </header>
+    <div class="live-wrap">
+      <div>
+        <div class="qr-big">
+          <div class="frame" id="qrframe">QR…</div>
+          <div class="txt">
+            <span style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);font-weight:700">Session code</span>
+            <span class="code-big">${esc(s.id)}</span>
+            <small>Scan the QR, or open <b style="color:var(--acc-l)">${esc(location.host + location.pathname)}</b> → I'm a student → enter the code.</small>
+          </div>
+        </div>
+        <section class="grid-stage" id="gridstage">
+          <div class="grid-head"><div class="lbl">Live Sync</div><div class="timer" id="gridtimer">…</div></div>
+          ${gridHTML()}
+          <div class="grid-tip" id="gridtip">${s.strict
+            ? `🔒 Strict: tap the <b>glowing cell</b>, wait for it to <b>move</b>, then tap the <b>new</b> glowing cell.`
+            : `Tap the <b>glowing cell</b> on your phone. It moves every ${GRID_WINDOW_MS / 1000} seconds.`}</div>
+        </section>
+      </div>
+      <div>
+        <div class="stats">
+          <div class="stat ok"><b id="st-present">0</b><small>Present</small></div>
+          <div class="stat"><b id="st-class">—</b><small>Class size</small></div>
+          <div class="stat warn"><b id="st-pending">0</b><small>Verifying</small></div>
+        </div>
+        <div class="pills" style="margin:0 0 12px">
+          <div class="pill" id="pill-open">…</div>
+          <div class="pill" id="pill-sync">…</div>
+          <button class="pill btn-pill" data-action="extend">+5 min</button>
+          <button class="pill btn-pill" data-action="close-session">Close</button>
+          <button class="pill btn-pill" data-action="fullscreen">⛶ Full screen</button>
+          <button class="pill btn-pill" data-action="spot-check">🎲 Spot check</button>
+        </div>
+        <div id="spot"></div>
+        <div class="roster-head">
+          <h2>Checked in <span id="cnt">0</span></h2>
+          <button data-action="export-session">⬇ Excel</button>
+        </div>
+        <details class="panel" style="margin-bottom:12px">
+          <summary>➕ Mark a student present manually</summary>
+          <div class="row2">
+            <label class="fld" style="margin:0"><span>Index number</span><input id="m-id" placeholder="${INDEX_PREFIX}/0000/21" autocomplete="off"></label>
+            <label class="fld" style="margin:0"><span>Name (only if not on a list)</span><input id="m-name" autocomplete="off"></label>
+          </div>
+          <button class="btn ghost" data-action="manual-add" style="margin-top:10px">Mark present</button>
+          <div id="m-msg"></div>
+        </details>
+        <div id="list"></div>
+      </div>
+    </div>`;
+}
+
+/* ---------- student views ---------- */
+function viewStudent() {
+  const st = state.student;
+  if (st.step === 'grid' || st.step === 'verifying') return viewStudentGrid();
+  if (st.step === 'result') return viewStudentResult();
+  const saved = (() => { try { return JSON.parse(safeGet(LS.student)) || {}; } catch { return {}; } })();
+  return `
+    ${topbar('Check in', 'Step 1 of 2 — your details')}
+    <div class="step-indicator"><span class="s on">1</span><span class="line"></span><span class="s">2</span></div>
+    <div class="panel">
+      <label class="fld" style="margin-bottom:8px"><span>Session code</span>
+        <input id="in-session" placeholder="e.g. K7Q2M" maxlength="5" autocapitalize="characters" autocomplete="off" spellcheck="false"
+               value="${esc(st.code || '')}" style="text-transform:uppercase;letter-spacing:.18em;font-weight:700;text-align:center;font-size:20px"></label>
+      <div class="sess-preview" id="sess-preview"></div>
+      <label class="fld"><span>Index number</span>
+        <input id="in-studentid" placeholder="${INDEX_PREFIX}/0000/21" autocomplete="off" inputmode="numeric" spellcheck="false"
+               value="${esc(st.id || saved.id || '')}" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600"></label>
+      <label class="fld ${st.needName ? '' : 'hidden'}" id="name-fld"><span>Your full name</span>
+        <input id="in-name" placeholder="Surname Firstname" autocomplete="name" value="${esc(st.name || saved.name || '')}"></label>
+      <button class="btn primary big" data-action="student-continue">Continue →</button>
+      <div id="status" class="status"></div>
+    </div>
+    <p class="foot">Next step: match the glowing cell on the lecturer's screen.<br>${INDEX_HELP}</p>`;
+}
+
+function viewStudentGrid() {
+  const st = state.student;
+  const verifying = st.step === 'verifying';
+  const left = MAX_ATTEMPTS - (st.attemptsUsed || 0);
+  return `
+    ${topbar('Step 2 of 2 — Live Sync', esc(st.sess.className), 'cancel-grid', levelChipHTML(st.sess.level))}
+    <div class="step-indicator"><span class="s done">✓</span><span class="line"></span><span class="s on">2</span></div>
+    <div class="who"><span style="font-size:24px">🎓</span><div><strong>${esc(st.name)}</strong><small>${esc(st.id)}${st.level ? ' · Level ' + esc(st.level) : ''}</small></div></div>
+    <div class="grid-stage" style="margin-bottom:12px">
+      ${verifying ? `
+        <div class="spinner"></div>
+        <div class="grid-instruction"><b>Checking your tap…</b><small id="verify-note">The lecturer's screen is confirming it. Keep this page open.</small></div>`
+      : `
+        ${st.second != null
+          ? `<div class="grid-instruction"><b>✓ First tap saved. Now watch the screen.</b><small>When the glow <b>moves</b>, tap the <b>new</b> glowing cell.</small></div>`
+          : `<div class="grid-instruction"><b>Look at the lecturer's screen.</b><small>Tap the cell that is glowing there right now.${st.sess.strict ? ' (You will tap twice — once now, once after it moves.)' : ''}</small></div>`}
+        ${gridHTML({ interactive: true, picked: st.second != null ? st.firstCell : (st.lastWrong ?? null), wrong: st.second == null && st.lastWrong != null, disabled: st.cooldown })}
+        <div class="grid-tip" id="grid-feedback">${st.second != null ? 'Waiting for the glow to move… then tap the new cell.' : (st.feedback || `You have <b>${left} ${left === 1 ? 'try' : 'tries'}</b>. Look up, then tap.`)}</div>`}
+    </div>
+    <p class="foot">Not your name? Go back and check your index number.</p>`;
+}
+
+function viewStudentResult() {
+  const st = state.student, v = st.verdict || {};
+  const L = levelById(st.level || st.sess.level) || { icon:'🔬', color:'#14b8a6' };
+  if (!v.ok) return `
+    <div class="result rejected">
+      <div class="ring">✕</div>
+      <h2>Check-in not accepted</h2>
+      <p>${esc(v.note || 'Both taps did not match the lecturer\'s screen.')}</p>
+      <p style="margin-top:10px">If you are in class, ask the lecturer to mark you present.</p>
+      <button class="btn ghost" data-action="back-home" style="margin-top:24px">Done</button>
+    </div>`;
+  const emojis = ['🧪','🔬','🧬','💉','🩸','✨'];
+  return `
+    <div class="result present">
+      <div class="burst">${emojis.map((e, i) => {
+        const a = (i / emojis.length) * Math.PI * 2;
+        return `<span style="--dx:${Math.round(Math.cos(a) * 120)}px;--dy:${Math.round(Math.sin(a) * 120)}px;--rot:${i * 45}deg;animation-delay:${i * 40}ms">${e}</span>`;
+      }).join('')}</div>
+      <div class="ring">✓</div>
+      <h2>You're on the roster!</h2>
+      <p>${st.already ? 'You had already checked in for this session.' : `Nice work, ${esc(String(st.name).split(' ')[0])}. You matched the live grid.`}</p>
+      <div class="meta">
+        <div class="r-lvl" style="border-color:${L.color}55;color:${L.color}">${L.icon} Level ${esc(st.level || st.sess.level)}</div>
+        <div><b>${esc(st.name)}</b> · ${esc(st.id)}</div>
+        <div>${esc(st.sess.courseCode ? st.sess.courseCode + ' — ' : '')}${esc(st.sess.className)}</div>
+        <div>${fmtTime(v.at)}</div>
+      </div>
+      <p style="margin-top:14px;font-size:12.5px">Not your name? Tell your lecturer immediately.</p>
+      <button class="btn ghost" data-action="back-home" style="margin-top:20px">Done</button>
+    </div>`;
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function render() {
+  stopTimers();
+  const app = $('#app');
+  app.classList.toggle('wide', state.view === 'teacher-live');
+  switch (state.view) {
+    case 'home':          app.innerHTML = viewHome(); break;
+    case 'settings':      app.innerHTML = viewSettings(); fillSettings(); break;
+    case 'lecturer-join': app.innerHTML = viewLecturerJoin(); break;
+    case 'teacher':       app.innerHTML = viewTeacher(); loadTeacherData(); break;
+    case 'teacher-live':  app.innerHTML = viewTeacherLive(); startLive(); break;
+    case 'student':       app.innerHTML = viewStudent(); afterStudentRender(); break;
+  }
+  window.scrollTo(0, 0);
+}
+const say = (sel, m, c = '') => { const el = $(sel); if (el) { el.className = 'status ' + c; el.textContent = m; } };
+const msg = (sel, m, c = 'info') => { const el = $(sel); if (el) el.innerHTML = m ? `<div class="msgline ${c}">${esc(m)}</div>` : ''; };
+const friendly = e => e instanceof PermissionError ? 'Permission denied by the database.' : e.message;
+
+/* ============================================================
+   LECTURER
+   ============================================================ */
+async function goTeacher() {
+  try {
+    if (await loadLecturer()) { state.view = 'teacher'; } else { state.view = 'lecturer-join'; }
+  } catch (e) { alert(friendly(e)); return; }
+  render();
+}
+
+async function lecturerJoin(btn) {
+  const name = $('#l-name').value.trim().replace(/\s+/g, ' ');
+  if (name.length < 3) return say('#status', 'Enter your name.', 'err');
+  btn.disabled = true;
+  try {
+    if (isCloud()) {
+      const key = $('#l-key').value;
+      if (!key) throw new Error('Enter the department key.');
+      const uid = await myUid();
+      try { await DB.put(`lecturers/${uid}`, { name, k: key }); }
+      catch (e) { if (e instanceof PermissionError) throw new Error('Wrong department key.'); throw e; }
+    }
+    safeSet(LS.localName, name);
+    await loadLecturer();
+    state.view = 'teacher'; render();
+  } catch (e) { say('#status', friendly(e), 'err'); btn.disabled = false; }
+}
+
+async function mySessions() {
+  const uid = await myUid();
+  const mine = await DB.queryEq('sessions', 'owner', uid);
+  // Sessions this lecturer started on another device (matched by name) can still be exported here.
+  const byName = state.lecturer?.name ? await DB.queryEq('sessions', 'lecturer', state.lecturer.name).catch(() => ({})) : {};
+  return Object.values({ ...byName, ...mine }).filter(s => s && s.id)
+    .map(s => ({ ...s, here: s.owner === uid })).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+async function loadTeacherData() {
+  loadRosterTable();
+  try {
+    const list = await mySessions();
+    state.sessionsCache = list;
+    const el = $('#my-sessions');
+    if (!el) return;
+    el.innerHTML = list.length ? `<table class="tbl"><tr><th>Session</th><th>Opened</th><th></th></tr>
+      ${list.slice(0, 40).map(s => {
+        const open = !s.closed && Date.now() < s.endsAt;
+        return `<tr><td><b>${esc(s.courseCode || '')}</b> ${esc(s.className)}<small>Level ${esc(s.level)} · code ${esc(s.id)} ${open ? '· <span style="color:#86efac">OPEN</span>' : ''}${s.here ? '' : ' · started on another device'}</small></td>
+          <td>${fmtDateTime(s.createdAt)}</td>
+          <td style="text-align:right;white-space:nowrap">${s.here ? `<button class="mini-btn" data-action="open-session" data-id="${esc(s.id)}">${open ? 'Show grid' : 'Open'}</button>` : ''}
+              <button class="mini-btn acc" data-action="export-session" data-id="${esc(s.id)}">⬇ Excel</button></td></tr>`; }).join('')}</table>`
+      : `<div class="empty"><span class="ico">🧫</span>No sessions yet.</div>`;
+    const courses = [...new Set(list.map(s => s.courseCode || s.className))];
+    const sel = $('#reg-course');
+    if (sel) sel.innerHTML = courses.length ? courses.map(c => `<option>${esc(c)}</option>`).join('') : '<option value="">—</option>';
+  } catch (e) { const el = $('#my-sessions'); if (el) el.innerHTML = `<div class="msgline err">${esc(friendly(e))}</div>`; }
+}
+
+async function loadRosterTable() {
+  const el = $('#rosters');
+  if (!el) return;
+  try {
+    const metas = {};
+    await Promise.all(LEVELS.map(async l => { metas[l.id] = await DB.get(`rosters/${l.id}/meta`); }));
+    el.innerHTML = `<tr><th>Level</th><th>Students</th><th>File</th><th></th></tr>` + LEVELS.map(l => {
+      const m = metas[l.id];
+      return `<tr><td style="white-space:nowrap"><b>${l.icon} ${l.id}</b></td><td>${m ? `<b>${m.count}</b>` : '<span style="color:var(--mut)">—</span>'}</td>
+        <td>${m ? `${esc(m.filename)}<small>${fmtDateTime(m.uploadedAt)} · ${esc(m.by || '')}</small>` : '<small>Not uploaded</small>'}</td>
+        <td style="text-align:right;white-space:nowrap"><button class="mini-btn ${m ? '' : 'acc'}" data-action="roster-upload" data-level="${l.id}">${m ? 'Replace' : '⬆ Upload'}</button>
+          ${m ? `<button class="mini-btn bad" data-action="roster-remove" data-level="${l.id}" title="Remove">✕</button>` : ''}</td></tr>`;
+    }).join('');
+  } catch (e) { el.innerHTML = `<tr><td><div class="msgline err">${esc(friendly(e))}</div></td></tr>`; }
+}
+
+/* ---------- class list upload ---------- */
+function cellText(v) {
+  if (v == null) return '';
+  if (typeof v === 'object') return String(v.text ?? v.result ?? (v.richText ? v.richText.map(t => t.text).join('') : ''));
+  return String(v);
+}
+async function parseClassList(buffer) {
+  const ExcelJS = await loadScript(CDN_EXCELJS, 'ExcelJS');
+  const wb = new ExcelJS.Workbook();
+  try { await wb.xlsx.load(buffer); } catch { throw new Error('Could not read the file. Save it as an Excel .xlsx file and try again.'); }
+  for (const ws of wb.worksheets) {
+    let hdr = null;
+    for (let r = 1; r <= Math.min(ws.rowCount, 20) && !hdr; r++) {
+      const cells = (ws.getRow(r).values || []).map(v => cellText(v).trim().toLowerCase());
+      const idCol = cells.findIndex(t => /^(id|id no\.?|index|index no\.?|index number|student id|student no\.?|matric(ulation)?( no\.?| number)?|reg(istration)?( no\.?| number)?)$/.test(t));
+      const nameCol = cells.findIndex(t => /name/.test(t));
+      if (idCol > 0 && nameCol > 0) hdr = { row: r, idCol, nameCol, sexCol: cells.findIndex(t => /^(sex|gender)$/.test(t)) };
+    }
+    if (!hdr) continue;
+    const students = [], invalid = [], duplicates = [], seen = new Set();
+    for (let r = hdr.row + 1; r <= ws.rowCount; r++) {
+      const row = ws.getRow(r);
+      const rawId = cellText(row.getCell(hdr.idCol).value).trim();
+      const name = cellText(row.getCell(hdr.nameCol).value).trim().replace(/\s+/g, ' ').slice(0, 100);
+      if (!rawId && !name) continue;
+      const id = normalizeIndex(rawId);
+      if (!id || !name) { invalid.push({ row: r, id: rawId, name }); continue; }
+      if (seen.has(id)) { duplicates.push({ row: r, id }); continue; }
+      seen.add(id);
+      const sx = hdr.sexCol > 0 ? cellText(row.getCell(hdr.sexCol).value).trim().toUpperCase() : '';
+      students.push({ id, name, sex: sx.startsWith('F') ? 'F' : sx.startsWith('M') ? 'M' : '' });
+    }
+    return { students, invalid, duplicates };
+  }
+  throw new Error('No header row found. The sheet needs columns titled "ID" (or "Index Number") and "FULL NAME".');
+}
+async function uploadRoster(level, file) {
+  msg('#roster-msg', `Reading ${file.name}…`);
+  try {
+    const p = await parseClassList(await file.arrayBuffer());
+    if (!p.students.length) throw new Error(`No valid students found. ${INDEX_HELP}`);
+    const students = {};
+    p.students.forEach((s, i) => { students[toKey(s.id)] = { id: s.id, name: s.name, sex: s.sex, pos: i + 1 }; });
+    await DB.put(`rosters/${level}`, { students, meta: { count: p.students.length, filename: file.name.slice(0, 120), uploadedAt: SV, by: state.lecturer?.name || '' } });
+    await DB.put(`rosterIndex/${level}`, p.students.length);
+    const years = {};
+    p.students.forEach(s => { const y = entryYear(s.id); years[y] = (years[y] || 0) + 1; });
+    let text = `Level ${level}: ${p.students.length} students loaded.\nAdmission years — ${Object.entries(years).map(([y, n]) => `${y}: ${n}`).join(', ')}`;
+    if (p.invalid.length) text += `\n\n${p.invalid.length} row(s) skipped (bad index number or no name):\n` + p.invalid.slice(0, 12).map(x => `  Row ${x.row}: "${x.id}" ${x.name}`).join('\n');
+    if (p.duplicates.length) text += `\n\nDuplicates ignored: ` + p.duplicates.map(x => `${x.id} (row ${x.row})`).join(', ');
+    msg('#roster-msg', text, p.invalid.length || p.duplicates.length ? 'info' : 'ok');
+    loadRosterTable();
+  } catch (e) { msg('#roster-msg', friendly(e), 'err'); }
+}
+
+/* ---------- start / open a session ---------- */
+async function startSession(btn) {
+  const className = $('#t-class').value.trim().replace(/\s+/g, ' ').slice(0, 120);
+  const courseCode = $('#t-code').value.trim().toUpperCase().replace(/\s+/g, ' ').slice(0, 20);
+  const level = $('#t-level').value;
+  if (!courseCode && !className) return say('#status', 'Enter the course code or title.', 'err');
+  btn.disabled = true; btn.textContent = 'Opening…';
+  try {
+    const uid = await myUid();
+    const offset = await DB.serverOffset();
+    const now = Date.now() + offset;
+    let id, created = false;
+    for (let i = 0; i < 5 && !created; i++) {
+      id = randCode(5);
+      if (await DB.get(`sessions/${id}`)) continue;
+      await DB.put(`sessions/${id}`, {
+        id, owner: uid, className: className || courseCode, courseCode, level,
+        lecturer: state.lecturer?.name || '', createdAt: now, endsAt: now + state.setupMinutes * 60000, closed: false, strict: !!state.setupStrict });
+      created = true;
+    }
+    if (!created) throw new Error('Could not create a session code. Try again.');
+    const secret = randSecret();
+    SecretStore.set(id, secret);
+    await DB.put(`secrets/${id}`, secret);
+    safeSet(LS.level, level); state.level = level;
+    await openLive(id);
+  } catch (e) {
+    say('#status', friendly(e), 'err');
+    btn.disabled = false; btn.textContent = 'Open Live Sync';
+  }
+}
+
+async function openLive(id) {
+  const session = await DB.get(`sessions/${id}`);
+  if (!session) throw new Error('Session not found.');
+  let secret = SecretStore.get(id);
+  if (!secret) { secret = await DB.get(`secrets/${id}`).catch(() => null); if (secret) SecretStore.set(id, secret); }
+  if (!secret) throw new Error('This session was opened on another device. Open it there to verify students.');
+  const roster = await loadAllRosters(session.level);
+  endLive();
+  state.live = { id, session, secret, offset: await DB.serverOffset(), roster, taps: {}, verdicts: {}, lastSync: 0, syncErr: '' };
+  state.view = 'teacher-live';
+  render();
+}
+
+// Lecturer-side: all class lists keyed by student key → {id,name,sex,pos,level}
+async function loadAllRosters(preferLevel) {
+  const idx = await rosterIndex();
+  const byLevel = {}, byKey = {};
+  for (const l of Object.keys(idx)) {
+    const st = (await DB.get(`rosters/${l}/students`)) || {};
+    byLevel[l] = st;
+    for (const [k, v] of Object.entries(st)) if (!byKey[k] || l === String(preferLevel)) byKey[k] = { ...v, level: l };
+  }
+  return { byLevel, byKey, listsExist: Object.values(idx).some(n => n > 0) };
+}
+
+/* ---------- live session: grid + verification loop ---------- */
+function startLive() {
+  drawQR();
+  tickLive();
+  renderLiveRoster();
+  tickTimer = setInterval(tickLive, 250);
+  startTapStream(state.live);
+  const loop = async () => {
+    await syncLive();
+    const lv = state.live;
+    const streaming = lv?.es && lv.es.readyState === 1 && lv.streamAt;
+    if (state.view === 'teacher-live') pollTimer = setTimeout(loop, streaming ? 5000 : POLL_MS * 2);
+  };
+  loop();
+}
+async function drawQR() {
+  const frame = $('#qrframe');
+  const url = `${location.origin}${location.pathname}?s=${state.live.id}`;
+  try {
+    const qrcode = await loadScript(CDN_QRCODE, 'qrcode');
+    const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+    if (frame) frame.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+  } catch { if (frame) frame.textContent = 'Type the session code'; }
+}
+const liveNow = () => Date.now() + (state.live?.offset || 0);
+const sessionOpen = s => !s.closed && liveNow() < s.endsAt;
+
+function tickLive() {
+  const lv = state.live; if (!lv) return;
+  const now = liveNow(), s = lv.session, open = sessionOpen(s);
+  const stage = $('#gridstage'); if (stage) stage.classList.toggle('closed', !open);
+  const active = cellFor(lv.secret, gridWindow(now));
+  document.querySelectorAll('#gridstage .grid-cell').forEach((c, i) => c.classList.toggle('active', open && i === active));
+  const t = $('#gridtimer');
+  if (t) t.innerHTML = open ? `moves in <b>${Math.ceil(msUntilGridRotation(now) / 1000)}s</b>` : 'closed';
+  const po = $('#pill-open');
+  if (po) po.innerHTML = open ? `⏳ Closes in <b>${fmtMMSS(s.endsAt - now)}</b>` : '🔒 <b>Closed</b>';
+  const ps = $('#pill-sync');
+  if (ps) {
+    const age = lv.lastSync ? (Date.now() - lv.lastSync) / 1000 : 99;
+    ps.className = 'pill ' + (age < 15 ? 'live' : 'dead');
+    ps.innerHTML = age < 15 ? `🟢 Live` : `🔴 ${lv.syncErr ? esc(lv.syncErr) : 'Reconnecting…'}`;
+  }
+}
+
+// Standard: one tap on the glowing cell.  Strict: a tap, then another tap after the glow has moved.
+function evaluateTaps(secret, attempts, session, now) {
+  const strict = !!session.strict;
+  const inTime = t => typeof t?.at === 'number' && t.at <= session.endsAt + 5000;
+  let wrong = 0, count = 0, waiting = false;
+  for (let n = 1; n <= MAX_ATTEMPTS; n++) {
+    const a = attempts?.[String(n)];
+    if (!a) break;
+    const wa = inTime(a) ? tapWindow(secret, Number(a.cell), a.at) : -1;
+    if (!strict) {
+      count = n;
+      if (wa >= 0) return { ok: true, final: true, attempts: n, wrong, at: a.at };
+      wrong++; continue;
+    }
+    const b = attempts?.[n + 'b'];
+    if (!b) {
+      if (now - a.at < SECOND_TAP_MS) { waiting = true; break; }   // still waiting for the 2nd tap
+      count = n; wrong++; continue;                                  // 2nd tap never came
+    }
+    count = n;
+    const wb = inTime(b) ? tapWindow(secret, Number(b.cell), b.at) : -1;
+    if (wa >= 0 && wb > wa && b.at - a.at <= SECOND_TAP_MS) return { ok: true, final: true, attempts: n, wrong, at: b.at };
+    wrong++;
+  }
+  return { ok: false, final: wrong >= MAX_ATTEMPTS, attempts: count, wrong, at: null, waiting };
+}
+
+// Cloud: receive taps as a live stream (only changes are downloaded — keeps Firebase within the free plan).
+async function startTapStream(lv) {
+  if (!isCloud() || !('EventSource' in window) || state.live !== lv) return;
+  try {
+    const es = new EventSource(await Cloud.url(`taps/${lv.id}`));
+    lv.es = es;
+    const handle = (ev, merge) => {
+      try { const { path, data } = JSON.parse(ev.data); lv.taps = applyDelta(lv.taps, path, data, merge); lv.streamAt = Date.now(); syncLive(); } catch (_) {}
+    };
+    es.addEventListener('put', e => handle(e, false));
+    es.addEventListener('patch', e => handle(e, true));
+    es.addEventListener('keep-alive', () => { lv.streamAt = Date.now(); });
+    es.addEventListener('auth_revoked', () => { es.close(); if (Auth.data) Auth.data.exp = 0; startTapStream(lv); });
+    es.addEventListener('cancel', () => es.close());
+  } catch (_) { /* fall back to polling */ }
+}
+function endLive() {
+  if (state.live?.es) state.live.es.close();
+  state.live = null;
+}
+
+async function syncLive() {
+  const lv = state.live; if (!lv || lv.syncing) return;
+  lv.syncing = true;
+  try {
+    const now = Date.now();
+    const streaming = lv.es && lv.es.readyState === 1 && lv.streamAt;
+    const jobs = [];
+    if (!streaming) jobs.push(DB.get(`taps/${lv.id}`).then(t => { lv.taps = t || {}; }));
+    if (!isCloud() || !lv.verdictsLoaded) jobs.push(DB.get(`verdicts/${lv.id}`).then(v => { lv.verdicts = v || {}; lv.verdictsLoaded = true; }));
+    if (!isCloud() || !lv.sessionAt || now - lv.sessionAt > 15000) jobs.push(DB.get(`sessions/${lv.id}`).then(s => { if (s) lv.session = s; lv.sessionAt = now; }));
+    await Promise.all(jobs);
+    if (state.live !== lv) return;
+    // verify every student's taps and publish verdicts
+    const writes = {};
+    for (const [key, attempts] of Object.entries(lv.taps)) {
+      const old = lv.verdicts[key];
+      if (old && old.locked) continue;
+      const ev = evaluateTaps(lv.secret, attempts, lv.session, liveNow());
+      const st = lv.roster.byKey[key];
+      const first = attempts[1] || attempts['1'] || {};
+      const v = { ...ev, id: fromKey(key), name: st?.name || String(first.name || '').slice(0, 100) || fromKey(key),
+                  level: st?.level || lv.session.level, method: lv.session.strict ? 'Live grid (2 taps)' : 'Live grid' };
+      if (!st && lv.roster.listsExist) Object.assign(v, { ok: false, final: true, note: 'Not on any class list' });
+      if (!old || old.ok !== v.ok || old.final !== v.final || old.attempts !== v.attempts || old.note !== v.note || old.waiting !== v.waiting) {
+        writes[key] = v; lv.verdicts[key] = v;
+      }
+    }
+    if (Object.keys(writes).length) await DB.patch(`verdicts/${lv.id}`, writes);
+    lv.lastSync = Date.now(); lv.syncErr = '';
+  } catch (e) { lv.syncErr = e instanceof PermissionError ? 'No permission' : 'Offline'; }
+  finally { lv.syncing = false; }
+  renderLiveRoster();
+}
+
+function renderLiveRoster() {
+  const lv = state.live, list = $('#list'); if (!lv || !list) return;
+  const rows = [];
+  const keys = new Set([...Object.keys(lv.taps || {}), ...Object.keys(lv.verdicts || {})]);
+  for (const key of keys) {
+    const v = lv.verdicts[key];
+    const st = lv.roster.byKey[key];
+    const name = v?.name || st?.name || fromKey(key);
+    const status = v?.ok ? 'ok' : v?.final ? 'bad' : 'pending';
+    const firstAt = (lv.taps[key]?.[1] || lv.taps[key]?.['1'] || {}).at;
+    rows.push({ key, name, status, v, at: v?.at || firstAt || 0 });
+  }
+  const present = rows.filter(r => r.status === 'ok');
+  const pending = rows.filter(r => r.status === 'pending');
+  const lvlList = lv.roster.byLevel[lv.session.level];
+  const set = (id, val) => { const el = $(id); if (el) el.textContent = val; };
+  set('#st-present', present.length); set('#cnt', present.length); set('#st-pending', pending.length);
+  set('#st-class', lvlList ? Object.keys(lvlList).length : '—');
+  const order = { pending: 0, ok: 1, bad: 2 };
+  rows.sort((a, b) => order[a.status] - order[b.status] || b.at - a.at);
+  list.innerHTML = rows.length ? rows.map(r => `
+    <div class="row ${r.status === 'pending' ? 'pending' : r.status === 'bad' ? 'rejected' : ''}">
+      <div class="avatar ${r.status === 'pending' ? 'warn' : r.status === 'bad' ? 'bad' : ''}">${esc(r.name.trim().charAt(0).toUpperCase() || '?')}</div>
+      <div class="row-main"><strong>${esc(r.name)}</strong>
+        <small>${esc(fromKey(r.key))} · ${fmtTime(r.at)}${r.status === 'pending' && r.v?.waiting ? ' · waiting for 2nd tap' : ''}${r.v?.wrong ? ` · ${r.v.wrong} wrong tap${r.v.wrong > 1 ? 's' : ''}` : ''}${r.v?.note ? ' · ' + esc(r.v.note) : ''}${r.v?.method === 'Added by lecturer' ? ' · added manually' : ''}</small></div>
+      <span class="badge ${r.status === 'ok' ? 'ok' : r.status === 'bad' ? 'bad' : 'warn'}">${r.status === 'ok' ? 'Present' : r.status === 'bad' ? 'Rejected' : 'Verifying'}</span>
+      ${r.status === 'ok' ? `<button class="x" data-action="remove-student" data-key="${esc(r.key)}" title="Remove">✕</button>`
+        : r.status === 'bad' ? `<button class="x" data-action="approve-student" data-key="${esc(r.key)}" title="Mark present" style="color:#86efac">✓</button>` : ''}
+    </div>`).join('')
+    : `<div class="empty"><span class="ico">🧫</span>No check-ins yet.<br>Students: scan the QR or enter code <b style="color:var(--acc-l)">${esc(lv.id)}</b>.</div>`;
+}
+
+function renderSpot() {
+  const lv = state.live, el = $('#spot'); if (!lv || !el) return;
+  if (!lv.spot) { el.innerHTML = ''; return; }
+  const rows = lv.spot.filter(k => lv.verdicts[k]?.ok);
+  el.innerHTML = `<div class="panel" style="margin-bottom:12px;border-color:rgba(251,191,36,.35)">
+    <h3>🎲 Spot check — call these names</h3>
+    <p class="sub">If a student doesn't answer, tap ✕ to remove them. Students never know who will be picked.</p>
+    ${rows.length ? rows.map(k => `<div class="row" style="margin-bottom:6px"><div class="row-main"><strong>${esc(lv.verdicts[k].name)}</strong><small>${esc(fromKey(k))}</small></div>
+      <button class="x" data-action="remove-student" data-key="${esc(k)}" title="Not in class — remove">✕</button></div>`).join('') : '<div class="status">Nobody to check.</div>'}
+    <div style="display:flex;gap:8px;margin-top:8px"><button class="mini-btn" data-action="spot-check">Pick 5 others</button><button class="mini-btn" data-action="spot-close">Done</button></div></div>`;
+}
+
+async function setVerdict(key, v) {
+  const lv = state.live;
+  await DB.put(`verdicts/${lv.id}/${key}`, v);
+  lv.verdicts[key] = v; renderLiveRoster(); renderSpot();
+}
+async function manualAdd() {
+  const lv = state.live;
+  const id = normalizeIndex($('#m-id').value);
+  if (!id) return msg('#m-msg', INDEX_HELP, 'err');
+  const key = toKey(id), st = lv.roster.byKey[key];
+  const name = st?.name || $('#m-name').value.trim().replace(/\s+/g, ' ');
+  if (!name) return msg('#m-msg', `${id} is not on any class list — type the student's name too.`, 'err');
+  if (lv.verdicts[key]?.ok) return msg('#m-msg', `${name} is already present.`, 'info');
+  try {
+    await setVerdict(key, { ok: true, final: true, locked: true, attempts: 0, wrong: 0, at: liveNow(), id, name, level: st?.level || lv.session.level,
+                            method: 'Added by lecturer', note: st ? '' : 'Not on class list' });
+    msg('#m-msg', `${name} (${id}) marked present.`, 'ok');
+    $('#m-id').value = ''; $('#m-name').value = '';
+  } catch (e) { msg('#m-msg', friendly(e), 'err'); }
+}
+
+/* ============================================================
+   EXCEL
+   ============================================================ */
+const BRAND = 'FF0F766E', GREEN = 'FF15803D', RED = 'FFC0392B';
+function excelLocal(ms) { return new Date(ms - new Date(ms).getTimezoneOffset() * 60000); }
+function styleHeader(row) {
+  row.eachCell(c => {
+    c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND } };
+    c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  });
+}
+function titleBlock(ws, lines, width) {
+  lines.forEach((text, i) => {
+    const r = ws.addRow([text]);
+    ws.mergeCells(r.number, 1, r.number, width);
+    r.font = i === 0 ? { bold: true, size: 14 } : { size: 11 };
+  });
+  ws.addRow([]);
+}
+async function downloadWorkbook(wb, filename) {
+  const buf = await wb.xlsx.writeBuffer();
+  const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+const safeName = s => String(s).replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_|_$/g, '');
+
+async function exportSession(id) {
+  const ExcelJS = await loadScript(CDN_EXCELJS, 'ExcelJS');
+  const s = await DB.get(`sessions/${id}`);
+  if (!s) throw new Error('Session not found.');
+  const verdicts = (await DB.get(`verdicts/${id}`)) || {};
+  const rosters = await loadAllRosters(s.level);
+  const list = Object.entries(rosters.byLevel[s.level] || {}).sort((a, b) => a[1].pos - b[1].pos);
+  const onList = new Set(list.map(([k]) => k));
+  const lines = list.map(([k, st]) => ({ key: k, id: st.id, name: st.name, sex: st.sex, v: verdicts[k]?.ok ? verdicts[k] : null, rej: verdicts[k] && !verdicts[k].ok ? verdicts[k] : null, note: '' }));
+  Object.entries(verdicts).filter(([k, v]) => v.ok && !onList.has(k)).sort((a, b) => a[0].localeCompare(b[0])).forEach(([k, v]) =>
+    lines.push({ key: k, id: fromKey(k), name: v.name, sex: rosters.byKey[k]?.sex || '', v, rej: null,
+      note: list.length ? `Not on Level ${s.level} list${rosters.byKey[k] ? ` (Level ${rosters.byKey[k].level})` : ''}` : '' }));
+  const presentOnList = lines.filter(l => l.v && onList.has(l.key)).length;
+  const present = lines.filter(l => l.v).length;
+
+  const wb = new ExcelJS.Workbook(); wb.creator = s.lecturer || 'LabCheck'; wb.created = new Date();
+  const ws = wb.addWorksheet('Attendance');
+  const cols = ['S/N', 'Index Number', 'Full Name', 'Sex', 'Entry Year', 'Status', 'Check-in Time', 'Verified By', 'Remarks'];
+  titleBlock(ws, [
+    `${DEPARTMENT.toUpperCase()} — ATTENDANCE SHEET`,
+    `Course: ${s.courseCode ? s.courseCode + ' – ' : ''}${s.className}    Level: ${s.level}    Lecturer: ${s.lecturer || ''}`,
+    `Session code: ${s.id}    Opened: ${fmtDateTime(s.createdAt)}    Closed: ${fmtDateTime(Math.min(s.endsAt, Date.now()))}`,
+    list.length
+      ? `Class size: ${list.length}    Present: ${presentOnList}    Absent: ${list.length - presentOnList}    Attendance: ${Math.round(presentOnList / list.length * 100)}%` + (present > presentOnList ? `    (+${present - presentOnList} not on class list)` : '')
+      : `Total present: ${present}    (Upload the Level ${s.level} class list to also list absentees.)`
+  ], cols.length);
+  const hdr = ws.addRow(cols); styleHeader(hdr);
+  const shown = list.length ? lines : lines.filter(l => l.v);
+  shown.forEach((l, i) => {
+    const remarks = [l.note, l.v?.wrong ? `${l.v.wrong} wrong tap(s) before success` : '', l.rej ? `Check-in rejected${l.rej.note ? ': ' + l.rej.note : ' (wrong taps)'}` : '', l.v?.note && l.v.method === 'Added by lecturer' ? l.v.note : ''].filter(Boolean).join('; ');
+    const row = ws.addRow([i + 1, l.id, l.name, l.sex, entryYear(l.id), l.v ? 'PRESENT' : 'ABSENT', l.v?.at ? excelLocal(l.v.at) : null, l.v?.method || null, remarks]);
+    row.getCell(6).font = { bold: true, color: { argb: l.v ? GREEN : RED } };
+  });
+  [6, 16, 38, 6, 10, 11, 20, 18, 34].forEach((w, i) => ws.getColumn(i + 1).width = w);
+  ws.getColumn(7).numFmt = 'dd/mm/yyyy hh:mm:ss';
+  ws.views = [{ state: 'frozen', ySplit: hdr.number }];
+  if (shown.length) ws.autoFilter = { from: { row: hdr.number, column: 1 }, to: { row: hdr.number + shown.length, column: cols.length } };
+  if (list.length) {
+    const absent = lines.filter(l => !l.v);
+    const wa = wb.addWorksheet(`Absent (${absent.length})`);
+    styleHeader(wa.addRow(['S/N', 'Index Number', 'Full Name', 'Sex']));
+    absent.forEach((l, i) => wa.addRow([i + 1, l.id, l.name, l.sex]));
+    [6, 16, 38, 6].forEach((w, i) => wa.getColumn(i + 1).width = w);
+  }
+  await downloadWorkbook(wb, `${safeName(s.courseCode || s.className)}_L${s.level}_${new Date(s.createdAt).toISOString().slice(0, 10)}_${s.id}.xlsx`);
+}
+
+async function exportRegister(course) {
+  const ExcelJS = await loadScript(CDN_EXCELJS, 'ExcelJS');
+  const sessions = (await mySessions()).filter(s => (s.courseCode || s.className) === course).sort((a, b) => a.createdAt - b.createdAt);
+  if (!sessions.length) throw new Error('No sessions for this course.');
+  const level = sessions.every(s => s.level === sessions[0].level) ? sessions[0].level : null;
+  const rosters = await loadAllRosters();
+  const verdicts = {};
+  await Promise.all(sessions.map(async s => { verdicts[s.id] = (await DB.get(`verdicts/${s.id}`)) || {}; }));
+  const students = new Map();
+  if (level) Object.entries(rosters.byLevel[level] || {}).sort((a, b) => a[1].pos - b[1].pos)
+    .forEach(([k, st]) => students.set(k, { id: st.id, name: st.name, sex: st.sex, onList: true }));
+  const extras = [];
+  for (const s of sessions) for (const [k, v] of Object.entries(verdicts[s.id])) if (v.ok && !students.has(k)) {
+    students.set(k, { id: fromKey(k), name: v.name, sex: rosters.byKey[k]?.sex || '', onList: false }); extras.push(k);
+  }
+  const order = [...students.keys()].filter(k => students.get(k).onList).concat(extras.sort());
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Register');
+  const sCols = sessions.map(s => new Date(s.createdAt).toLocaleDateString('en-GB') + '\n' + new Date(s.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+  const cols = ['S/N', 'Index Number', 'Full Name', 'Sex', ...sCols, 'Attended', 'Total Sessions', '% Attendance', 'Remarks'];
+  titleBlock(ws, [
+    `${DEPARTMENT.toUpperCase()} — COURSE ATTENDANCE REGISTER`,
+    `Course: ${course}${sessions[0].courseCode ? ' – ' + sessions.at(-1).className : ''}${level ? '    Level: ' + level : ''}    Lecturer: ${sessions[0].lecturer || ''}`,
+    `Sessions: ${sessions.length}    Students: ${order.length}    P = Present, A = Absent    (below 70% highlighted)`
+  ], cols.length);
+  const hdr = ws.addRow(cols); styleHeader(hdr); hdr.height = 32;
+  order.forEach((k, i) => {
+    const st = students.get(k);
+    const marks = sessions.map(s => verdicts[s.id][k]?.ok ? 'P' : 'A');
+    const att = marks.filter(m => m === 'P').length;
+    const row = ws.addRow([i + 1, st.id, st.name, st.sex, ...marks, att, sessions.length, att / sessions.length, st.onList || !level ? '' : `Not on Level ${level} list`]);
+    marks.forEach((m, j) => { const c = row.getCell(5 + j); c.alignment = { horizontal: 'center' }; c.font = { bold: true, color: { argb: m === 'P' ? GREEN : RED } }; });
+    const pc = row.getCell(cols.length - 1); pc.numFmt = '0%';
+    if (att / sessions.length < 0.7) pc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE2E1' } };
+  });
+  [6, 16, 38, 6, ...sessions.map(() => 12), 10, 10, 12, 22].forEach((w, i) => ws.getColumn(i + 1).width = w);
+  ws.views = [{ state: 'frozen', xSplit: 3, ySplit: hdr.number }];
+  await downloadWorkbook(wb, `${safeName(course)}${level ? '_L' + level : ''}_register.xlsx`);
+}
+
+/* ============================================================
+   STUDENT
+   ============================================================ */
+function afterStudentRender() {
+  const st = state.student;
+  if (st.step === 'form' && st.code && st.code.length === 5) previewSession(st.code);
+  if (st.step === 'verifying') pollVerdict();
+}
+async function previewSession(raw) {
+  const el = $('#sess-preview'); if (!el) return;
+  const code = (raw || '').trim().toUpperCase();
+  if (code.length !== 5) { el.className = 'sess-preview'; el.textContent = ''; return; }
+  el.className = 'sess-preview'; el.textContent = 'Looking up…';
+  try {
+    const s = await DB.get(`sessions/${code}`);
+    if (!s) { el.className = 'sess-preview bad'; el.textContent = 'No session with that code.'; return; }
+    if (s.closed || Date.now() > s.endsAt) { el.className = 'sess-preview bad'; el.textContent = `L${s.level} · ${s.className} — session has closed.`; return; }
+    const L = levelById(s.level);
+    el.className = 'sess-preview ok';
+    el.textContent = `${L ? L.icon + ' ' : ''}Level ${s.level} · ${s.courseCode ? s.courseCode + ' — ' : ''}${s.className} — ${Math.max(1, Math.ceil((s.endsAt - Date.now()) / 60000))} min left`;
+  } catch (e) { el.className = 'sess-preview bad'; el.textContent = 'Could not look up that session. ' + friendly(e); }
+}
+
+async function studentContinue(btn) {
+  const st = state.student;
+  st.code = $('#in-session').value.trim().toUpperCase();
+  const id = normalizeIndex($('#in-studentid').value);
+  const typedName = ($('#in-name')?.value || '').trim().replace(/\s+/g, ' ').slice(0, 100);
+  if (st.code.length !== 5) return say('#status', 'Enter the 5-character session code.', 'err');
+  if (!id) return say('#status', INDEX_HELP, 'err');
+  if (!yearOk(id)) return say('#status', `The year in ${id} (20${id.slice(-2)}) is not valid. ${INDEX_HELP}`, 'err');
+  btn.disabled = true; btn.textContent = 'Checking…';
+  try {
+    const sess = await DB.get(`sessions/${st.code}`);
+    if (!sess) throw new Error('No session with that code.');
+    const key = toKey(id);
+    const existing = await DB.get(`verdicts/${st.code}/${key}`);
+    const who = await findStudent(key, sess.level);
+    let name = who.none ? typedName : who.name;
+    if (who.none && who.listsExist) throw new Error(`${id} is not on any class list. Check your index number, or ask the lecturer to mark you present.`);
+    Object.assign(st, { sess, id, key, level: who.none ? sess.level : who.level });
+    if (existing?.ok) { Object.assign(st, { name: existing.name || name, verdict: existing, already: true, step: 'result' }); return render(); }
+    if (existing?.final) { Object.assign(st, { name: existing.name || name, verdict: existing, step: 'result' }); return render(); }
+    if (sess.closed || Date.now() > sess.endsAt) throw new Error('This session has closed.');
+    if (who.none && name.length < 3) {
+      st.needName = true; $('#name-fld').classList.remove('hidden'); $('#in-name').focus();
+      throw new Error('Enter your full name.');
+    }
+    st.name = name;
+    // one phone = one student per session
+    if (isCloud()) {
+      const uid = await myUid();
+      const lock = await DB.get(`devices/${st.code}/${uid}`);
+      if (lock && lock !== key) throw new Error(`This phone has already been used to check in ${fromKey(lock)}. Each student must use their own phone.`);
+      if (!lock) await DB.put(`devices/${st.code}/${uid}`, key);
+    }
+    safeSet(LS.student, JSON.stringify({ id, name }));
+    const myTaps = (await DB.get(`taps/${st.code}/${key}`)) || {};
+    st.attemptsUsed = 0; st.second = null;
+    for (let n = 1; n <= MAX_ATTEMPTS; n++) {
+      if (!myTaps[n]) break;
+      if (!sess.strict || myTaps[n + 'b']) st.attemptsUsed = n;
+      else if (Date.now() - myTaps[n].at < SECOND_TAP_MS - 5000) { st.second = n; st.firstCell = myTaps[n].cell; }
+      else st.attemptsUsed = n;   // 2nd tap missed — that try is used up
+    }
+    st.lastWrong = null; st.feedback = '';
+    st.step = st.attemptsUsed && !(existing && existing.attempts >= st.attemptsUsed) && st.second == null ? 'verifying' : 'grid';
+    render();
+  } catch (e) {
+    say('#status', friendly(e), 'err');
+    btn.disabled = false; btn.textContent = 'Continue →';
+  }
+}
+
+async function tapCell(cell) {
+  const st = state.student;
+  if (st.step !== 'grid' || st.busy) return;
+  st.busy = true;
+  const second = st.second != null;
+  const n = second ? st.second : (st.attemptsUsed || 0) + 1;
+  try {
+    await DB.put(`taps/${st.code}/${st.key}/${n}${second ? 'b' : ''}`, { cell, at: SV, uid: isCloud() ? Cloud.uid() : LocalDB.uid(), name: st.name });
+    if (st.sess.strict && !second) {
+      // strict mode: ask for the second tap after the glow moves
+      st.second = n; st.firstCell = cell; st.cooldown = true; st.busy = false; render();
+      setTimeout(() => { st.cooldown = false; if (st.step === 'grid') render(); }, 2000);
+      return;
+    }
+    st.second = null; st.attemptsUsed = n; st.lastCell = cell; st.step = 'verifying';
+  } catch (e) {
+    st.second = null;
+    if (e instanceof PermissionError) {
+      const fresh = await DB.get(`sessions/${st.code}`).catch(() => null);
+      if (!fresh || fresh.closed || Date.now() > fresh.endsAt) {
+        st.feedback = '<b style="color:#fca5a5">This session has closed.</b> If you are in class, ask the lecturer to mark you present.';
+      } else {
+        st.attemptsUsed = n; st.lastCell = cell; st.step = 'verifying';   // this tap was already recorded — wait for its result
+      }
+    } else st.feedback = `<b style="color:#fca5a5">Could not send:</b> ${esc(e.message)}`;
+  }
+  st.busy = false;
+  render();
+}
+
+async function pollVerdict() {
+  const st = state.student, started = Date.now();
+  const token = st.pollToken = Math.random();
+  while (state.view === 'student' && st.step === 'verifying' && st.pollToken === token) {
+    try {
+      const v = await DB.get(`verdicts/${st.code}/${st.key}`);
+      if (v && (v.attempts >= st.attemptsUsed || v.final || v.ok)) {
+        if (v.ok || v.final) { Object.assign(st, { verdict: v, step: 'result', name: v.name || st.name }); return render(); }
+        st.step = 'grid'; st.lastWrong = st.lastCell ?? null;
+        const left = MAX_ATTEMPTS - st.attemptsUsed;
+        st.feedback = `<b style="color:#fca5a5">Not that one.</b> ${left} ${left === 1 ? 'try' : 'tries'} left — look at the screen again.`;
+        render();
+        setTimeout(() => { if (st.step === 'grid') { st.lastWrong = null; document.querySelectorAll('.tap-cell.wrong').forEach(c => c.classList.remove('wrong')); } }, 900);
+        return;
+      }
+    } catch (_) {}
+    const waited = Date.now() - started;
+    const note = $('#verify-note');
+    if (note && waited > 15000) note.textContent = 'Still waiting for the lecturer\'s screen. Your tap is saved with the exact time — keep this page open.';
+    await sleep(waited > 60000 ? 4000 : POLL_MS);
+  }
+}
+
+/* ============================================================
+   SETTINGS
+   ============================================================ */
+async function fillSettings() {
+  const el = $('#lect-status'); if (!el) return;
+  try {
+    const l = await loadLecturer();
+    el.textContent = l ? `Lecturer access: ${l.name}.` : 'No lecturer access on this device (students don\'t need it).';
+  } catch (e) { el.textContent = friendly(e); }
+}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+const act = fn => async (btn, e) => { try { await fn(btn, e); } catch (err) { alert(friendly(err)); } };
+const actions = {
+  'set-level': btn => { state.level = btn.dataset.level; safeSet(LS.level, state.level); render(); },
+  'go-teacher': act(() => goTeacher()),
+  'go-student': () => { state.student = { step: 'form', code: '' }; state.view = 'student'; render(); },
+  'go-settings': () => { state.view = 'settings'; render(); },
+  'back-home': () => { endLive(); state.student = null; state.view = 'home'; history.replaceState(null, '', location.pathname); render(); },
+  'lecturer-join': btn => lecturerJoin(btn),
+  'lecturer-signout': act(async () => {
+    if (!confirm('Remove lecturer access from this device?')) return;
+    if (isCloud()) { const uid = await myUid(); await DB.put(`lecturers/${uid}`, null).catch(() => {}); }
+    safeRemove(LS.localName); state.lecturer = null; render();
+  }),
+  'set-strict': btn => {
+    state.setupStrict = btn.dataset.v === '1'; safeSet('labcheck.strict', btn.dataset.v);
+    document.querySelectorAll('#sec-chips .chip').forEach(c => c.classList.toggle('on', c === btn));
+  },
+  'set-dur': btn => {
+    state.setupMinutes = Number(btn.dataset.min);
+    document.querySelectorAll('#dur-chips .chip').forEach(c => c.classList.toggle('on', c === btn));
+  },
+  'start-session': btn => startSession(btn),
+  'open-session': act(btn => openLive(btn.dataset.id)),
+  'leave-live': () => { endLive(); state.view = 'teacher'; render(); },
+  'extend': act(async () => {
+    const lv = state.live;
+    const endsAt = Math.max(lv.session.endsAt, liveNow()) + 5 * 60000;
+    await DB.patch(`sessions/${lv.id}`, { endsAt, closed: false });
+    Object.assign(lv.session, { endsAt, closed: false }); tickLive();
+  }),
+  'close-session': act(async () => {
+    if (!confirm('Close this session? Students will no longer be able to check in.')) return;
+    const lv = state.live;
+    await DB.patch(`sessions/${lv.id}`, { closed: true });
+    lv.session.closed = true; tickLive();
+  }),
+  'export-session': act(async btn => {
+    const id = btn.dataset.id || state.live?.id;
+    const old = btn.textContent; btn.textContent = 'Preparing…'; btn.disabled = true;
+    try { await exportSession(id); } finally { btn.textContent = old; btn.disabled = false; }
+  }),
+  'export-register': act(async btn => {
+    const c = $('#reg-course').value; if (!c) return;
+    btn.disabled = true; say('#reg-status', 'Preparing…');
+    try { await exportRegister(c); say('#reg-status', ''); } catch (e) { say('#reg-status', friendly(e), 'err'); } finally { btn.disabled = false; }
+  }),
+  'roster-upload': btn => { state.uploadLevel = btn.dataset.level; const f = $('#roster-file'); f.value = ''; f.click(); },
+  'roster-remove': act(async btn => {
+    const l = btn.dataset.level;
+    if (!confirm(`Remove the Level ${l} class list? Past attendance is kept.`)) return;
+    await DB.put(`rosterIndex/${l}`, null); await DB.put(`rosters/${l}`, null); msg('#roster-msg', ''); loadRosterTable();
+  }),
+  'manual-add': act(() => manualAdd()),
+  'fullscreen': () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.().catch(() => {}); },
+  'spot-check': () => {
+    const lv = state.live;
+    const pool = Object.keys(lv.verdicts).filter(k => lv.verdicts[k]?.ok && lv.verdicts[k].method !== 'Added by lecturer' && !(lv.spot || []).includes(k));
+    const pick = [];
+    while (pool.length && pick.length < 5) pick.push(pool.splice(rnd(1)[0] % pool.length, 1)[0]);
+    lv.spot = pick; renderSpot();
+  },
+  'spot-close': () => { state.live.spot = null; renderSpot(); },
+  'remove-student': act(async btn => {
+    const lv = state.live, k = btn.dataset.key, v = lv.verdicts[k] || {};
+    if (!confirm(`Remove ${v.name || fromKey(k)} from this session?`)) return;
+    await setVerdict(k, { ...v, ok: false, final: true, locked: true, note: 'Removed by lecturer' });
+  }),
+  'approve-student': act(async btn => {
+    const lv = state.live, k = btn.dataset.key, v = lv.verdicts[k] || {};
+    if (!confirm(`Mark ${v.name || fromKey(k)} present?`)) return;
+    await setVerdict(k, { ...v, ok: true, final: true, locked: true, at: v.at || liveNow(), method: 'Added by lecturer' });
+  }),
+  'student-continue': btn => studentContinue(btn),
+  'tap-cell': btn => tapCell(Number(btn.dataset.cell)),
+  'cancel-grid': () => { Object.assign(state.student, { step: 'form', pollToken: null, second: null }); render(); },
+  'save-settings': () => {
+    const url = $('#s-cloud').value.trim().replace(/\/$/, '');
+    const key = $('#s-key').value.trim();
+    if (url && !/^https?:\/\//.test(url)) return say('#status', 'The URL should start with https://', 'err');
+    if (url && !key) return say('#status', 'Also paste the Web API key.', 'err');
+    url ? safeSet(LS.cloud, url) : safeRemove(LS.cloud);
+    key ? safeSet(LS.apiKey, key) : safeRemove(LS.apiKey);
+    safeRemove(LS.auth);
+    applyCloud();
+    say('#status', url ? 'Saved on this device. Tap "Test connection".' : 'Cleared — demo mode.', 'ok');
+    fillSettings();
+  },
+  'clear-settings': () => { safeRemove(LS.cloud); safeRemove(LS.apiKey); safeRemove(LS.auth); applyCloud(); render(); },
+  'test-connection': async () => {
+    if (!isCloud()) return say('#status', 'Demo mode — nothing to test. Save a Firebase URL first.', 'err');
+    say('#status', 'Testing…');
+    try { await Auth.token(); await DB.get('rosterIndex'); say('#status', 'Connected. Sign-in and database both work.', 'ok'); }
+    catch (e) { say('#status', e instanceof PermissionError ? 'Connected, but the database rules are not installed yet (see SETUP.md step 4).' : e.message, 'err'); }
+  },
+  'reset-local': () => { if (confirm('Erase all demo data in this browser?')) { safeRemove(LS.localDb); safeRemove(LS.secrets); say('#status', 'Demo data erased.', 'ok'); } }
+};
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-action]');
+  if (!t || t.disabled) return;
+  e.preventDefault();
+  actions[t.dataset.action]?.(t, e);
+});
+document.addEventListener('change', e => {
+  if (e.target.id === 'roster-file' && e.target.files[0]) uploadRoster(state.uploadLevel, e.target.files[0]);
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'in-session') {
+    e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+    clearTimeout(state._previewTimer);
+    state._previewTimer = setTimeout(() => previewSession(e.target.value), 350);
+  }
+  if (e.target.id === 'in-studentid' || e.target.id === 'm-id') {
+    const raw = e.target.value.toUpperCase().replace(new RegExp('^' + INDEX_PREFIX + '\\/?'), '');
+    const digits = raw.replace(/[^0-9]/g, '').slice(0, 6);
+    if (!digits) { e.target.value = ''; return; }
+    let out = INDEX_PREFIX + '/' + digits.slice(0, 4);
+    if (digits.length > 4) out += '/' + digits.slice(4, 6);
+    e.target.value = out;
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+  const btn = e.target.closest('.panel')?.querySelector('.btn.primary');
+  if (btn) { e.preventDefault(); btn.click(); }
+});
+const onSync = () => { if (state.view === 'teacher-live') syncLive(); };
+if (bc) bc.onmessage = onSync;
+window.addEventListener('storage', onSync);
+
+// Deep link from the QR code: ?s=CODE opens the student check-in directly.
+const deep = new URLSearchParams(location.search).get('s');
+if (deep) { state.student = { step: 'form', code: deep.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5) }; state.view = 'student'; }
+render();
+</script>
+</body>
+</html>
